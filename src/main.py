@@ -3,6 +3,7 @@ from users.router import router as users_router
 from tasks.router import router as tasks_router
 import models
 from database import engine, SessionLocal
+from tasks import service as task_service
 
 app = FastAPI()
 
