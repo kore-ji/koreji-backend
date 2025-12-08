@@ -1,22 +1,33 @@
 import uuid
 from enum import Enum as PyEnum
-from sqlalchemy import ARRAY, Column, DateTime, Enum, Integer, Text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import ARRAY, Column, DateTime, Enum, Integer, Text, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 from database import Base
-import user
+
+from .user import ModeEnum, ToolEnum
+
+
+class EventType(PyEnum):
+    COMPLETED = "completed"
+    PAUSE_STARTED = "pause_started"
+    PAUSE_ENDED = "pause_ended"
+    RESUMED = "resumed"
+    STOPPED = "stopped"
 
 
 class Record(Base):
     __tablename__ = 'records'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, unique=True, nullable=False)
     task_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True, references='users.id')
-    
-    mode = Column(Enum(user.ModeEnum), nullable=False)
-    place = Column(Text, nullable=False)
-    tool = Column(ARRAY(Enum(user.ToolEnum)), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
 
+    mode = Column(Enum(ModeEnum), nullable=True)
+    place = Column(Text, nullable=True)
+    tool = Column(ARRAY(Enum(ToolEnum)), nullable=True)
+
+    event_type = Column(Enum(EventType, name="event_type"), nullable=False)
     duration_seconds = Column(Integer, nullable=True)
+    occurred_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
