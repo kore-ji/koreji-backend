@@ -38,5 +38,8 @@ class RecordService:
 
             db.commit()
             db.refresh(record)
-        return record
+            return record
+        else:
+            return None
+        
     
