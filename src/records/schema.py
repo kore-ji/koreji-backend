@@ -4,6 +4,12 @@ from uuid import UUID
 from typing import Optional, List, Any
 from enum import Enum
 
+class EventType(str, Enum):
+    INPROGRESS = "INPROGRESS"
+    PAUSE_START = "PAUSE_START"
+    PAUSE_END = "PAUSE_END"
+    QUIT = "QUIT"
+    COMPLETE = "COMPLETE"
 
 class RecordBase(BaseModel):
     id: UUID
@@ -16,6 +22,7 @@ class RecordCreate(BaseModel):
     mode : str
     place : str
     tool : List[str]
+    occurred_at: datetime
 
     @validator("occurred_at", pre=True, always=True)
     def set_occurred_at_now_if_missing(cls, v):
@@ -35,7 +42,10 @@ class RecordResponse(RecordBase):
     tool: Optional[List[str]] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    event_type : EventType
 
     model_config = ConfigDict(from_attributes=True)
-    class Config:
-        orm_mode = True
+
+class RecordUpdate(RecordBase):
+    event_type : EventType
+    updated_at: datetime
