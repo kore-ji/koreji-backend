@@ -1,4 +1,4 @@
-import uuid
+from uuid import UUID
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from tasks.schemas import (
     TaskCreate,
     TaskUpdate,
     SubtaskCreate,
+    SubtaskUpdate,
     TagGroupCreate,
     TagGroupUpdate,
     TagCreate,
@@ -120,7 +121,7 @@ def list_subtasks_for_task(db: Session, task_id: UUID) -> Optional[List[Task]]:
 
 
 # ----- Subtask -----
-def create_subtask(db: Session, payload: SubtaskCreate) -> Subtask:
+def create_subtask(db: Session, payload: SubtaskCreate) -> Task:
     parent = db.query(Task).filter(
         Task.id == payload.task_id,
         Task.is_subtask.is_(False),
@@ -151,7 +152,11 @@ def create_subtask(db: Session, payload: SubtaskCreate) -> Subtask:
 #     return db.query(Subtask).filter(Subtask.id == uuid.UUID(subtask_id)).first()
 
 
-def update_subtask(db: Session, subtask_id: str, payload: SubtaskUpdate) -> Optional[Subtask]:
+def update_subtask(
+    db: Session,
+    subtask_id: str,
+    payload: SubtaskUpdate,
+) -> Optional[Task]:
     subtask = db.query(Task).filter(
         Task.id == subtask_id,
         Task.is_subtask.is_(True),
