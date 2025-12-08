@@ -99,4 +99,4 @@ class GenerateSubtasksRequest(BaseModel):
 
 
 class GenerateSubtasksResponse(BaseModel):
-    subtasks: List[SubtaskResponse]
+    subtasks: List[TaskResponse]
