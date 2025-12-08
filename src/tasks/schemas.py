@@ -1,7 +1,7 @@
 from datetime import date
 from typing import List, Optional
 from pydantic import BaseModel
-from models.task import SubtaskStatus, SubtaskPriority
+from models.task import TaskStatus, TaskPriority
 from uuid import UUID
 
 # ----- Tag & TagGroup -----
@@ -13,12 +13,14 @@ class TagGroupCreate(TagGroupBase):
     pass
 
 
-class TagGroupUpdate(BaseModel):
-    name: Optional[str] = None
+# class TagGroupUpdate(BaseModel):
+#     name: Optional[str] = None
 
 
 class TagGroupResponse(TagGroupBase):
     id: UUID
+    type: str
+    is_system: bool
 
     class Config:
         orm_mode = True
@@ -33,42 +35,14 @@ class TagCreate(TagBase):
     pass
 
 
-class TagUpdate(BaseModel):
-    name: Optional[str] = None
-    tag_group_id: Optional[str] = None
+# class TagUpdate(BaseModel):
+#     name: Optional[str] = None
+#     tag_group_id: Optional[str] = None
 
 
 class TagResponse(TagBase):
     id: UUID
-
-    class Config:
-        orm_mode = True
-
-# ----- Subtask -----
-class SubtaskBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    priority: SubtaskPriority = SubtaskPriority.medium
-    status: SubtaskStatus = SubtaskStatus.pending
-    estimated_minutes: Optional[int] = None
-
-
-class SubtaskCreate(SubtaskBase):
-    task_id: UUID
-
-
-class SubtaskUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    priority: Optional[SubtaskPriority] = None
-    status: Optional[SubtaskStatus] = None
-    estimated_minutes: Optional[int] = None
-
-
-class SubtaskResponse(SubtaskBase):
-    id: UUID
-    actual_minutes: Optional[int] = None
-    tags: List[TagResponse] = []
+    is_system: bool
 
     class Config:
         orm_mode = True
@@ -77,29 +51,47 @@ class SubtaskResponse(SubtaskBase):
 class TaskBase(BaseModel):
     title: str
     description: Optional[str] = None
-    category: Optional[str] = None   # "School", "Work"...
     due_date: Optional[date] = None
+    status: TaskStatus = TaskStatus.pending
+    priority: Optional[TaskPriority] = None
+    estimated_minutes: Optional[int] = None
+    actual_minutes: Optional[int] = None
 
 
 class TaskCreate(TaskBase):
-    pass
+    category: Optional[str] = None
+
+class SubtaskCreate(TaskBase):
+    task_id: UUID
 
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    category: Optional[str] = None
     due_date: Optional[date] = None
-
+    status: Optional[TaskStatus] = None
+    priority: Optional[TaskPriority] = None
+    estimated_minutes: Optional[int] = None
+    actual_minutes: Optional[int] = None
+    category: Optional[str] = None
 
 class TaskResponse(TaskBase):
     id: UUID
+    is_subtask: bool
+    parent_id: Optional[UUID]
+    category: Optional[str]
     # progress is not save in DB, which is calculated from subtasks and then included in the response
     progress: float = 0.0
-    subtasks: List[SubtaskResponse] = []
+
+    tags: List[TagResponse] = []
+    subtasks: List[TaskResponse] = []
 
     class Config:
         orm_mode = True
+
+# ----- update task tags -----
+class UpdateTaskTagsRequest(BaseModel):
+    tag_ids: List[UUID]
 
 # ----- AI related -----
 class GenerateSubtasksRequest(BaseModel):

@@ -8,13 +8,13 @@ from database import Base
 import enum
 
 # ----- Enums -----
-class SubtaskStatus(str, enum.Enum):
+class TaskStatus(str, enum.Enum):
     pending = "pending"
     in_progress = "in_progress"
     completed = "completed"
-    archeieved = "archieved"
+    archived = "archived"
 
-class SubtaskPriority(str, enum.Enum):
+class TaskPriority(str, enum.Enum):
     low = "low"
     medium = "medium"
     high = "high"
@@ -26,29 +26,17 @@ class Task(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
+    is_subtask = Column(Boolean, nullable=False, default=False)
+    parent_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=True)
+    
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
 
     category = Column(String, nullable=True) 
     due_date = Column(Date, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-    subtasks = relationship("Subtask", back_populates="task", cascade="all, delete-orphan")
-
-# ----- Subtask Model -----
-class Subtask(Base):
-    __tablename__ = "subtasks"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False)
-
-    title = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-
-    status = Column(Enum(SubtaskStatus), default=SubtaskStatus.pending, nullable=False)
-    priority = Column(Enum(SubtaskPriority), default=SubtaskPriority.medium, nullable=False)
+    status = Column(Enum(TaskStatus), default=TaskStatus.pending, nullable=False)
+    priority = Column(Enum(TaskPriority), nullable=True)
 
     estimated_minutes = Column(Integer, nullable=True)
     actual_minutes = Column(Integer, nullable=True)
@@ -56,12 +44,14 @@ class Subtask(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    task = relationship("Task", back_populates="subtasks")
+    # relations
+    parent = relationship("Task", remote_side=[id], back_populates="subtasks")
+    subtasks = relationship("Task", back_populates="parent", cascade="all, delete-orphan")
 
     tags = relationship(
         "Tag",
-        secondary="subtask_tags",
-        back_populates="subtasks",
+        secondary="task_tags",
+        back_populates="tasks",
     )
 
 # ----- Tag Group Model -----
@@ -70,6 +60,11 @@ class TagGroup(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, nullable=False)
     name = Column(String, nullable=False)
+
+    type = Column(String, nullable=False, default="custom") # system / custom
+
+    is_system = Column(Boolean, nullable=False, default=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
     tags = relationship("Tag", back_populates="group", cascade="all, delete-orphan")
 
@@ -82,17 +77,20 @@ class Tag(Base):
 
     name = Column(String, nullable=False)
 
+    is_system = Column(Boolean, nullable=False, default=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    
     group = relationship("TagGroup", back_populates="tags")
 
-    subtasks = relationship(
-        "Subtask",
-        secondary="subtask_tags",
+    tasks = relationship(
+        "Task",
+        secondary="task_tags",
         back_populates="tags"
     )
 
-# ----- Join Table：Subtask-Tag -----
-class SubtaskTag(Base):
-    __tablename__ = "subtask_tags"
+# ----- Join Table：Task-Tag -----
+class TaskTag(Base):
+    __tablename__ = "task_tags"
 
-    subtask_id = Column(UUID(as_uuid=True), ForeignKey("subtasks.id", ondelete="CASCADE"), primary_key=True)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True)
     tag_id = Column(UUID(as_uuid=True), ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
