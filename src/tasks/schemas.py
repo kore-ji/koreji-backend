@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from models.task import TaskStatus, TaskPriority
 from uuid import UUID
 
@@ -13,8 +13,8 @@ class TagGroupCreate(TagGroupBase):
     pass
 
 
-# class TagGroupUpdate(BaseModel):
-#     name: Optional[str] = None
+class TagGroupUpdate(BaseModel):
+    name: Optional[str] = None
 
 
 class TagGroupResponse(TagGroupBase):
@@ -35,9 +35,9 @@ class TagCreate(TagBase):
     pass
 
 
-# class TagUpdate(BaseModel):
-#     name: Optional[str] = None
-#     tag_group_id: Optional[str] = None
+class TagUpdate(BaseModel):
+    name: Optional[str] = None
+    tag_group_id: Optional[UUID] = None
 
 
 class TagResponse(TagBase):
@@ -61,8 +61,28 @@ class TaskBase(BaseModel):
 class TaskCreate(TaskBase):
     category: Optional[str] = None
 
-class SubtaskCreate(TaskBase):
+class SubtaskCreate(BaseModel):
     task_id: UUID
+    title: str
+    description: Optional[str] = None
+    due_date: Optional[datetime] = None
+    status: TaskStatus = TaskStatus.pending
+    priority: Optional[TaskPriority] = None
+    estimated_minutes: Optional[int] = None
+    actual_minutes: Optional[int] = None
+
+class SubtaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    due_date: Optional[datetime] = None
+    status: Optional[TaskStatus] = None
+    priority: Optional[TaskPriority] = None
+    estimated_minutes: Optional[int] = None
+    actual_minutes: Optional[int] = None
+
+    class Config:
+        orm_mode = True
+
 
 
 class TaskUpdate(BaseModel):
@@ -83,11 +103,14 @@ class TaskResponse(TaskBase):
     # progress is not save in DB, which is calculated from subtasks and then included in the response
     progress: float = 0.0
 
-    tags: List[TagResponse] = []
-    subtasks: List[TaskResponse] = []
+    tags: List[TagResponse] = Field(default_factory=list)
+    subtasks: List["TaskResponse"] = Field(default_factory=list)
 
     class Config:
         orm_mode = True
+
+class SubtaskResponse(TaskResponse):
+    pass
 
 # ----- update task tags -----
 class UpdateTaskTagsRequest(BaseModel):
@@ -100,3 +123,8 @@ class GenerateSubtasksRequest(BaseModel):
 
 class GenerateSubtasksResponse(BaseModel):
     subtasks: List[TaskResponse]
+
+try:
+    TaskResponse.model_rebuild() 
+except AttributeError:
+    TaskResponse.update_forward_refs()
