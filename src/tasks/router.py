@@ -30,20 +30,20 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db)):
     return service.create_task(db, payload)
 
 
-@router.get("/{task_id}", response_model=TaskResponse)
-def get_task(task_id: UUID, db: Session = Depends(get_db)):
-    task = service.get_task(db, task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
-    return task
+# @router.get("/{task_id}", response_model=TaskResponse)
+# def get_task(task_id: UUID, db: Session = Depends(get_db)):
+#     task = service.get_task(db, task_id)
+#     if not task:
+#         raise HTTPException(404, "Task not found")
+#     return task
 
 
-@router.patch("/{task_id}", response_model=TaskResponse)
-def update_task(task_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db)):
-    task = service.update_task(db, task_id, payload)
-    if not task:
-        raise HTTPException(404, "Task not found")
-    return task
+# @router.patch("/{task_id}", response_model=TaskResponse)
+# def update_task(task_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db)):
+#     task = service.update_task(db, task_id, payload)
+#     if not task:
+#         raise HTTPException(404, "Task not found")
+#     return task
 
 # ----- Task List -----
 @router.get("/", response_model=list[TaskResponse])
@@ -127,3 +127,20 @@ def generate_subtasks(task_id: UUID, payload: GenerateSubtasksRequest, db: Sessi
     if result is None:
         raise HTTPException(404, "Task not found")
     return result
+
+# ----- Single Task CRUD -----
+
+@router.get("/{task_id}", response_model=TaskResponse)
+def get_task(task_id: UUID, db: Session = Depends(get_db)):
+    task = service.get_task(db, task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    return task
+
+
+@router.patch("/{task_id}", response_model=TaskResponse)
+def update_task(task_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db)):
+    task = service.update_task(db, task_id, payload)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    return task
