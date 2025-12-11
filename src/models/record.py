@@ -9,12 +9,11 @@ from .user import ModeEnum, ToolEnum
 
 
 class EventType(PyEnum):
-    COMPLETED = "completed"
-    PAUSE_STARTED = "pause_started"
-    PAUSE_ENDED = "pause_ended"
-    RESUMED = "resumed"
-    STOPPED = "stopped"
-
+    INPROGRESS = "INPROGRESS"
+    PAUSE_START = "PAUSE_START"
+    PAUSE_END = "PAUSE_END"
+    QUIT = "QUIT"
+    COMPLETE = "COMPLETE"
 
 class Record(Base):
     __tablename__ = 'records'
@@ -28,6 +27,6 @@ class Record(Base):
 
     event_type = Column(Enum(EventType, name="event_type"), nullable=False)
     duration_seconds = Column(Integer, nullable=True)
-    occurred_at = Column(DateTime, default=datetime.now, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+    occurred_at = Column(DateTime(timezone=True), default=datetime.now, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.now, onupdate=datetime.now, nullable=False)
