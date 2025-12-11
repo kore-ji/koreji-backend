@@ -1,29 +1,35 @@
-from http.client import HTTPException
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 from typing import List
-import uuid
 from .schema import *
-from .service import *
+import uuid
+from .service import RecordService
+from database import get_db
 
 router = APIRouter(prefix="/api/records", tags=["records"])
 
+allow_fields = [
+    "user_id",
+    "mode",
+    "place",
+    "tool",
+]
+
 @router.get("/")
-async def get_records() -> List[RecordResponse]:
-    records = get_records()
-    if records is None:
-        return HTTPException(status_code=404, detail="Records not found")
+def get_records_endpoint(user_id: uuid.UUID = None, mode: str = None, place: str = None, tool: list = None, db: Session = Depends(get_db)):
+    records = RecordService.get_records(db, user_id=user_id, mode=mode, place=place, tool=tool)
     return records
 
-@router.post("/")
-async def create_record(record: RecordCreate):
-    record = create_record(record)
-    if not record:
-        return HTTPException(status_code=400, detail="Record creation failed")
-    return record
+@router.post("/", response_model=RecordResponse)
+def create_record_endpoint(record: RecordCreate, db: Session = Depends(get_db)):
+    new_record = RecordService.create_record(db, record)
+    if not new_record:
+        raise HTTPException(status_code=400, detail="Record creation failed")
+    return new_record
 
-@router.put("/{record_id}")
-async def update_record(record_id: uuid.UUID, record: RecordUpdate):
-    record = update_record(record_id, record)
-    if not record:
-        return HTTPException(status_code=404, detail="Record not found")
-    return record
+@router.put("/{id}", response_model=RecordResponse)
+def update_record_endpoint(id: uuid.UUID, record: RecordUpdate, db: Session = Depends(get_db)):
+    updated_record = RecordService.update_record(db, id, record)
+    if not updated_record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    return updated_record
