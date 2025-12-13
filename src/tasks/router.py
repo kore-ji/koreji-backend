@@ -21,7 +21,7 @@ from models.task import TaskStatus, TaskPriority
 from tasks import service
 
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 # ----- Task CRUD -----
 
