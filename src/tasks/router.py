@@ -52,6 +52,8 @@ def list_tasks(
     parent_id: UUID | None = None,
     status: TaskStatus | None = None,
     category: str | None = None,
+    tag_ids: Annotated[list[UUID] | None, Query()] = None,
+    match: Literal["any", "all"] = "any",
     db: Session = Depends(get_db),
 ):
     """
@@ -69,6 +71,8 @@ def list_tasks(
         parent_id=parent_id,
         status=status,
         category=category,
+        tag_ids=tag_ids,
+        match=match,
     )
 
 @router.get("/{task_id}/subtasks", response_model=list[TaskResponse])

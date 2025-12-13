@@ -93,6 +93,8 @@ def list_tasks(
     parent_id: Optional[UUID] = None,
     status: Optional[TaskStatus] = None,
     category: Optional[str] = None,
+    tag_ids: Optional[List[UUID]] = None,
+    match: Literal["any", "all"] = "any",
 ) -> List[Task]:
     query = db.query(Task)
 
@@ -112,6 +114,34 @@ def list_tasks(
         query = query.filter(Task.status == status)
     if category is not None:
         query = query.filter(Task.category == category)
+    
+    # Tag filter
+    """
+    tag_ids: list of UUIDs
+    match="any": tasks that have at least one of the tags
+    match="all": tasks that have all of the tags
+    """
+    if tag_ids:
+        if match == "any":
+            query = (
+                query.join(Task.tags)
+                .filter(Tag.id.in_(tag_ids))
+                .distinct()
+            )
+        elif match == "all":
+            query = (
+                query.join(Task.tags)
+                .filter(Tag.id.in_(tag_ids))
+                .group_by(Task.id)
+                .having(func.count(distinct(Tag.id)) == len(tag_ids))
+            )
+        else:
+            # default to "any"
+            query = (
+                query.join(Task.tags)
+                .filter(Tag.id.in_(tag_ids))
+                .distinct()
+            )
 
     tasks = query.order_by(Task.due_date, Task.created_at).all()
 
@@ -284,20 +314,51 @@ def generate_subtasks(
     return {"subtasks": list(task.subtasks)}
 
 # ----- Ensure Default System Tag Groups -----
-DEFAULT_SYSTEM_GROUPS = ["Tools", "Attention", "Location"]
+DEFAULT_SYSTEM_GROUPS = ["Tools", "Attention", "Location","Interruptibility"]
+DEFAULT_SYSTEM_TAGS = {
+    "Tools": ["Phone", "Computer", "iPad", "Textbook"],
+    "Attention": ["Relax", "Focus", "Efficiency"],
+    "Location": ["Home", "Classroom", "Library", "None"],
+    "Interruptibility": ["Interruptible", "Not Interruptible"],
+}
 
 def ensure_default_tag_groups(db: Session):
+    # ensure default groups
+    group_map = {}
     for name in DEFAULT_SYSTEM_GROUPS:
-        exists = (
+        group = (
             db.query(TagGroup)
             .filter(TagGroup.name == name, TagGroup.type == "system")
             .first()
         )
-        if not exists:
+        if not group:
             group = TagGroup(
                 name=name,
                 type="system",
                 is_system=True,
             )
             db.add(group)
+            db.flush()
+        group_map[name] = group
+    
+    # ensure default tags
+    for group_name, tag_names in DEFAULT_SYSTEM_TAGS.items():
+        group = group_map.get(group_name)
+        if not group:
+            continue
+        for tag_name in tag_names:
+            exists = (
+                db.query(Tag)
+                .filter(Tag.tag_group_id == group.id, Tag.name == tag_name)
+                .first()
+            )
+            if not exists:
+                db.add(
+                    Tag(
+                        name=tag_name,
+                        tag_group_id=group.id,
+                        is_system=True,
+                    )
+                )
+
     db.commit()
