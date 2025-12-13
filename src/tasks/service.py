@@ -96,8 +96,9 @@ def list_tasks(
 ) -> List[Task]:
     query = db.query(Task)
 
-    if is_subtask is not None:
-        query = query.filter(Task.is_subtask.is_(is_subtask))
+    if is_subtask:
+        # When is_subtask=True, include tasks that don't have subtasks
+        query = query.filter(~Task.subtasks.any())
     if parent_id is not None:
         query = query.filter(Task.parent_id == parent_id)
     if status is not None:
