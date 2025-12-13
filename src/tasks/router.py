@@ -92,7 +92,7 @@ def create_subtask(payload: SubtaskCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/subtasks/{subtask_id}", response_model=TaskResponse)
-def update_subtask(subtask_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db)):
+def update_subtask(subtask_id: UUID, payload: SubtaskUpdate, db: Session = Depends(get_db)):
     subtask = service.update_subtask(db, subtask_id, payload)
     if not subtask:
         raise HTTPException(404, "Subtask not found")

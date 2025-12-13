@@ -80,6 +80,16 @@ def update_task(db: Session, task_id: str, payload: TaskUpdate) -> Optional[Task
     data = payload.dict(exclude_unset=True)
     for key, value in data.items():
         setattr(task, key, value)
+    
+    # if update top-level task priority, propagate to subtasks
+    if (not task.is_subtask) and ("priority" in data):
+        db.query(Task).filter(
+            Task.parent_id == task.id,
+            Task.is_subtask.is_(True),
+        ).update(
+            {Task.priority: task.priority},
+            synchronize_session=False,
+        )
 
     db.commit()
     db.refresh(task)
@@ -172,7 +182,7 @@ def create_subtask(db: Session, payload: SubtaskCreate) -> Task:
         description=payload.description,
         due_date=payload.due_date or parent.due_date,
         status=payload.status,
-        priority=payload.priority,
+        priority=parent.priority,
         estimated_minutes=payload.estimated_minutes,
         actual_minutes=payload.actual_minutes,
         category=parent.category,

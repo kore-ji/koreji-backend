@@ -67,7 +67,6 @@ class SubtaskCreate(BaseModel):
     description: Optional[str] = None
     due_date: Optional[datetime] = None
     status: TaskStatus = TaskStatus.pending
-    priority: Optional[TaskPriority] = None
     estimated_minutes: Optional[int] = None
     actual_minutes: Optional[int] = None
 
@@ -76,7 +75,6 @@ class SubtaskUpdate(BaseModel):
     description: Optional[str] = None
     due_date: Optional[datetime] = None
     status: Optional[TaskStatus] = None
-    priority: Optional[TaskPriority] = None
     estimated_minutes: Optional[int] = None
     actual_minutes: Optional[int] = None
 
