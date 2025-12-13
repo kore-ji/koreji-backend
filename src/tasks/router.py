@@ -58,6 +58,8 @@ def list_tasks(
     Use case:
     - Only view top-level tasks: /tasks?is_subtask=false
     - View tasks by category: /tasks?category=School
+    - View subtasks and tasks without subtasks: /tasks?is_subtask=true
+      (includes both subtasks and top-level tasks that have no children)
     - View subtasks under a specific task: /tasks?is_subtask=true&parent_id=<task_id>
       (There is also a dedicated endpoint /tasks/{task_id}/subtasks)
     """
