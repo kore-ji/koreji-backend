@@ -4,15 +4,26 @@ from .schema import *
 from models.record import Record
 from sqlalchemy.orm import Session
 from typing import List
+from models.user import ModeEnum, ToolEnum
 
 class RecordService:
     @staticmethod
-    def get_records(db: Session, user_id: uuid.UUID = None, mode: str = None, place: str = None, tool: list = None) -> List:
-        
-        # Query only the specified columns
-        results = db.query(Record).filter(user_id==user_id, mode==mode, place==place, tool==tool).all()
-        
-        
+    def get_records(db: Session, mode: ModeEnum = None, place: str = None, tool: ToolEnum = None) -> List: 
+        results = db.query(Record).filter(
+            (Record.mode == mode) if mode is not None else True,
+            (Record.place == place) if place is not None else True,
+            (Record.tool.in_(tool)) if tool is not None else True
+        ).all()  
+        return results
+    
+    @staticmethod
+    def get_record(db: Session, user_id: uuid.UUID = None, mode: ModeEnum = None, place: str = None, tool: ToolEnum = None) -> List: 
+        results = db.query(Record).filter(
+            (Record.user_id == user_id) if user_id is not None else True,
+            (Record.mode == mode) if mode is not None else True,
+            (Record.place == place) if place is not None else True,
+            (Record.tool.in_(tool)) if tool is not None else True
+        ).all()
         return results
     
     @staticmethod
