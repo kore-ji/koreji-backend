@@ -17,7 +17,12 @@ class RecordService:
         return results
     
     @staticmethod
-    def get_record(db: Session, user_id: uuid.UUID = None, mode: ModeEnum = None, place: str = None, tool: ToolEnum = None) -> List: 
+    def get_record_by_ID(db: Session, id: uuid.UUID) -> List: 
+        result = db.query(Record).filter(Record.id == id).all()
+        return result
+    
+    @staticmethod
+    def get_record_by_userID(db: Session, user_id: uuid.UUID = None, mode: ModeEnum = None, place: str = None, tool: ToolEnum = None) -> List: 
         results = db.query(Record).filter(
             (Record.user_id == user_id) if user_id is not None else True,
             (Record.mode == mode) if mode is not None else True,
