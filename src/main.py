@@ -38,6 +38,9 @@ app.include_router(records_router)
 # include tasks router
 app.include_router(tasks_router)
 
+# include tasks router
+app.include_router(tasks_router)
+
 # Create tables for development (Alembic handles migrations for production)
 models.Base.metadata.create_all(bind=engine)
 
