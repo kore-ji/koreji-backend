@@ -5,8 +5,6 @@ from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 from database import Base
 
-from .user import ModeEnum, ToolEnum
-
 
 class EventType(PyEnum):
     INPROGRESS = "INPROGRESS"
@@ -21,9 +19,9 @@ class Record(Base):
     task_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
 
-    mode = Column(Enum(ModeEnum), nullable=True)
+    mode = Column(Text, nullable=True)
     place = Column(Text, nullable=True)
-    tool = Column(ARRAY(Enum(ToolEnum)), nullable=True)
+    tool = Column(ARRAY(Text), nullable=True)
 
     event_type = Column(Enum(EventType, name="event_type"), nullable=False)
     duration_seconds = Column(Integer, nullable=True)

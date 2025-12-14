@@ -5,7 +5,6 @@ from .schema import *
 import uuid
 from .service import RecordService
 from database import get_db
-from models.user import ModeEnum, ToolEnum
 
 router = APIRouter(prefix="/api/records", tags=["records"])
 
@@ -17,7 +16,7 @@ allow_fields = [
 ]
 
 @router.get("/")
-def get_records_endpoint(mode: str = None, place: str = None, tool: str = None, db: Session = Depends(get_db)):
+def get_records_endpoint(mode: Optional[str] = None, place: Optional[str] = None, tool: Optional[List[str]] = None, db: Session = Depends(get_db)):
     records = RecordService.get_records(db, mode=mode, place=place, tool=tool)
     return records
 
@@ -26,9 +25,9 @@ def get_record_endpoint(id: uuid.UUID, db: Session = Depends(get_db)):
     records = RecordService.get_record_by_ID(db, id=id)
     return records
 
-@router.get("/{user_id}")
-def get_record_by_userID_endpoint(user_id: uuid.UUID, mode: str = None, place: str = None, tool: str = None, db: Session = Depends(get_db)):
-    records = RecordService.get_record(db, user_id=user_id, mode=mode, place=place, tool=tool)
+@router.get("/user/{user_id}")
+def get_record_by_userID_endpoint(user_id: uuid.UUID, mode: Optional[str] = None, place: Optional[str] = None, tool: Optional[List[str]] = None, db: Session = Depends(get_db)):
+    records = RecordService.get_record_by_userID(db, user_id=user_id, mode=mode, place=place, tool=tool)
     return records
 
 @router.post("/", response_model=RecordResponse)

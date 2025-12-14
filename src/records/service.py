@@ -4,15 +4,14 @@ from .schema import *
 from models.record import Record
 from sqlalchemy.orm import Session
 from typing import List
-from models.user import ModeEnum, ToolEnum
 
 class RecordService:
     @staticmethod
-    def get_records(db: Session, mode: str = None, place: str = None, tool: str = None) -> List: 
+    def get_records(db: Session, mode: str = None, place: str = None, tool: List[str] = None) -> List: 
         results = db.query(Record).filter(
             (Record.mode == mode) if mode is not None else True,
             (Record.place == place) if place is not None else True,
-            (Record.tool.in_(tool)) if tool is not None else True
+            (Record.tool.overlap(tool)) if tool is not None else True
         ).all()  
         return results
     
@@ -22,12 +21,12 @@ class RecordService:
         return result
     
     @staticmethod
-    def get_record_by_userID(db: Session, user_id: uuid.UUID = None, mode: str = None, place: str = None, tool: str = None) -> List: 
+    def get_record_by_userID(db: Session, user_id: uuid.UUID = None, mode: str = None, place: str = None, tool: List[str] = None) -> List: 
         results = db.query(Record).filter(
             (Record.user_id == user_id) if user_id is not None else True,
             (Record.mode == mode) if mode is not None else True,
             (Record.place == place) if place is not None else True,
-            (Record.tool.in_(tool)) if tool is not None else True
+            (Record.tool.overlap(tool)) if tool is not None else True
         ).all()
         return results
     
