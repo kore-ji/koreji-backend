@@ -332,6 +332,7 @@ def _system_prompt_for_subtasks(*, allowed: dict) -> str:
         2) tag 的表達方式要用 group + name，格式是：
         "tags": [{{"group": "Tools", "name": "laptop"}}, ...]
         3) 只輸出 JSON，不要多任何解釋文字。
+        4) Estimated time 請參考使用者的大任務預計時間來切分，總和盡量不要超過使用者大任務的預計時間。若使用者沒填寫就沒任意切分。
 
         允許的 Tag 清單（只能從這裡挑）：
         {allowed}
@@ -341,8 +342,91 @@ def _system_prompt_for_subtasks(*, allowed: dict) -> str:
         每個子任務請提供以下資訊：
         - title
         - description
-        - estimated_minutes（整數）
+        - estimated_minutes（整數）(請參考使用者的大任務預計時間來切分，總和盡量不要超過使用者大任務的預計時間。若使用者沒填寫就沒任意切分。)
         - tags（陣列，內容必須是使用者目前「已擁有」的 tag`,請每個 tag group 都至少包含一個 tag）
+            - tags 必須包含
+                - 「工具類型 (Tools)」的 tag 可自由選擇要不要加 (代表做這件事一定會需要用到什麼工具)
+                - 一個「模式 (Mode)」的 tag (代表這個子任務適合用什麼樣的心情/狀態去做)
+                - 至少一個「地點 (Location)」的 tag (代表這個子任務適合在哪裡做，沒有一定要的話可以就給 None)
+                - 一個「可中斷性 (Interruptibility)」的 tag (代表這個任務是否可以分很多段來做)
+                - 其他類型的 tag 可自由選擇要不要加
+
+        這邊給你一些例子，你可以參考這些例子來產生子任務：
+        準備推甄 (Priority: High)
+            建立推甄資訊整理表格
+            20 min | phone, computer, ipad | efficiency | home | n
+            整理 requirements
+            40 min | phone, computer, ipad | focus | home | y
+            寫個人簡歷
+            100 min | computer | focus | library | y
+            寫自傳
+            120 min | phone, computer, ipad| focus | library | y
+            寫讀書計畫
+            60 min | phone, computer, ipad | focus | library | n
+            整理專題成果
+            120 min | computer | focus | library | n
+            找老師寫推薦信
+            20 min | computer, phone | efficiency | none | n
+            列出各種有利審查資料
+            60 min | computer | focus | home | y
+            整理各種有利審查資料
+            15 min | computer | efficiency | home | n
+            印成績單
+            10 min | phone | efficiency | school | n
+            至網站填寫報名資料
+            20 min | computer | efficiency | none | n
+
+        京都旅行計畫 (Priority: Medium)
+            查詢機票
+            30 min | computer, phone | relax | home | y
+            訂飯店
+            30 min | computer, phone | relax | home | y
+            了解風俗民情
+            15 min | phone, ipad | relax | none | y
+            找景點
+            60 min | computer, phone, ipad | relax | none | y
+            找餐廳
+            30 min | computer, phone, ipad | relax | none | y
+            規劃行程
+            120 min | computer | focus | home | y
+            買網路、買保險
+            20 min | computer, phone | efficiency | none | n
+            整理行李
+            120 min | none | focus | home | y
+        畢業清理宿舍物品 (Priority: Medium)
+            在二手拍上 po 文拍賣物品
+            30 min | phone | relax | none | y
+            去圖書館還借的書
+            20 min | none | efficiency | library | n
+            整理廢棄講義與考卷去回收
+            20 min | none | efficiency | home | n
+            清空冰箱食物並擦拭內部層板
+            30 min | none | efficiency | home | n
+        當週課程 (Priority: Medium)
+            看影片
+            60 min | computer, ipad | focus | home | y
+            回答課後問題10題
+            10 min | computer, phone | efficiency | none | n
+            煮飯 (Priority: Low)
+            買食材
+            30 min | phone | relax | market | n
+            洗菜
+            10 min | none | efficiency | home | n
+            切菜
+            5 min | none | efficiency | home | n
+            煮菜
+            20 min | none | focus | home | n
+        發 IG 貼文 (Priority: Low)
+            挑照片
+            10 min | phone | relax | none | y
+            修照片
+            10 min | phone | relax | none | y
+            寫文案
+            10 min | phone | relax | none | y
+            排版
+            15 min | phone | relax | none | y
+            挑音樂
+            5 min | phone | relax | none | y
 
         輸出 JSON 格式：
         {{
@@ -410,6 +494,7 @@ async def generate_subtasks(
     user = f"""
         使用者的大任務標題：{task.title}
         使用者的大任務描述：{task.description or ""}
+        使用者規劃的大任務預計時間：{task.estimated_minutes or "無"}
     """.strip()
 
     # content = await openrouter_chat([

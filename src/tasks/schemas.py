@@ -139,7 +139,7 @@ class UpdateTaskTagsRequest(BaseModel):
 
 # ----- AI related -----
 class GenerateSubtasksRequest(BaseModel):
-    max_subtasks: int = 8
+    pass
 
 class GeneratedSubtask(BaseModel):
     id: str
