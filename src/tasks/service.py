@@ -512,10 +512,10 @@ async def generate_subtasks(
 
 
 # ----- Ensure Default System Tag Groups -----
-DEFAULT_SYSTEM_GROUPS = ["Tools", "Attention", "Location","Interruptibility"]
+DEFAULT_SYSTEM_GROUPS = ["Tools", "Mode", "Location","Interruptibility"]
 DEFAULT_SYSTEM_TAGS = {
     "Tools": ["Phone", "Computer", "iPad", "Textbook"],
-    "Attention": ["Relax", "Focus", "Efficiency"],
+    "Mode": ["Relax", "Focus", "Efficiency"],
     "Location": ["Home", "Classroom", "Library", "None"],
     "Interruptibility": ["Interruptible", "Not Interruptible"],
 }
