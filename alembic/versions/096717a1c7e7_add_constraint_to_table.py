@@ -22,9 +22,11 @@ def upgrade() -> None:
     """Upgrade schema."""
     # Add unique constraint on records.id (though primary key already enforces uniqueness)
     op.create_unique_constraint('records_id_unique', 'records', ['id'])
+    op.create_unique_constraint('users_id_unique', 'users', ['id'])
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # Drop the unique constraint
     op.drop_constraint('records_id_unique', 'records', type_='unique')
+    op.drop_constraint('users_id_unique', 'users', type_='unique')
