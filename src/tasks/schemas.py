@@ -4,9 +4,18 @@ from pydantic import BaseModel, Field
 from models.task import TaskStatus, TaskPriority
 from uuid import UUID
 
+try:
+    # Pydantic v2
+    from pydantic import ConfigDict
+    V2 = True
+except Exception:
+    V2 = False
+
 # ----- Tag & TagGroup -----
 class TagGroupBase(BaseModel):
     name: str
+    is_single_select: bool = False
+    allow_add_tag: bool = True
 
 
 class TagGroupCreate(TagGroupBase):
@@ -15,16 +24,20 @@ class TagGroupCreate(TagGroupBase):
 
 class TagGroupUpdate(BaseModel):
     name: Optional[str] = None
+    is_single_select: Optional[bool] = None
+    allow_add_tag: Optional[bool] = None
 
 
 class TagGroupResponse(TagGroupBase):
     id: UUID
     type: str
-    is_system: bool
+    created_at: datetime
 
-    class Config:
-        orm_mode = True
-
+    if V2:
+        model_config = ConfigDict(from_attributes=True)
+    else:
+        class Config:
+            orm_mode = True
 
 class TagBase(BaseModel):
     name: str
@@ -43,9 +56,13 @@ class TagUpdate(BaseModel):
 class TagResponse(TagBase):
     id: UUID
     is_system: bool
+    created_at: datetime
 
-    class Config:
-        orm_mode = True
+    if V2:
+        model_config = ConfigDict(from_attributes=True)
+    else:
+        class Config:
+            orm_mode = True
 
 # ----- Task -----
 class TaskBase(BaseModel):
@@ -78,8 +95,11 @@ class SubtaskUpdate(BaseModel):
     estimated_minutes: Optional[int] = None
     actual_minutes: Optional[int] = None
 
-    class Config:
-        orm_mode = True
+    if V2:
+        model_config = ConfigDict(from_attributes=True)
+    else:
+        class Config:
+            orm_mode = True
 
 
 
@@ -104,8 +124,11 @@ class TaskResponse(TaskBase):
     tags: List[TagResponse] = Field(default_factory=list)
     subtasks: List["TaskResponse"] = Field(default_factory=list)
 
-    class Config:
-        orm_mode = True
+    if V2:
+        model_config = ConfigDict(from_attributes=True)
+    else:
+        class Config:
+            orm_mode = True
 
 class SubtaskResponse(TaskResponse):
     pass

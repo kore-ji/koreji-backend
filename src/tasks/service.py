@@ -2,6 +2,7 @@ from uuid import UUID
 from typing import List, Optional, Literal
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func, distinct
 
 from models.task import (
     Task,
@@ -231,7 +232,9 @@ def create_tag_group(db: Session, payload: TagGroupCreate) -> TagGroup:
     group = TagGroup(
         name=payload.name,
         type="custom",     # system we use seed build
-        is_system=False,
+        user_id=None,
+        is_single_select=payload.is_single_select,
+        allow_add_tag=payload.allow_add_tag,
     )
     db.add(group)
     db.commit()
@@ -240,7 +243,7 @@ def create_tag_group(db: Session, payload: TagGroupCreate) -> TagGroup:
 
 
 def list_tag_groups(db: Session) -> List[TagGroup]:
-    return db.query(TagGroup).order_by(TagGroup.name).all()
+    return db.query(TagGroup).order_by(TagGroup.created_at.asc()).all()
 
 def update_tag_group(db: Session, group_id: UUID, payload: TagGroupUpdate) -> Optional[TagGroup]:
     group = db.query(TagGroup).filter(TagGroup.id == group_id).first()
@@ -286,7 +289,7 @@ def list_tags_by_group(db: Session, group_id: UUID) -> List[Tag]:
     return (
         db.query(Tag)
         .filter(Tag.tag_group_id == group_id)
-        .order_by(Tag.name)
+        .order_by(Tag.created_at.asc())
         .all()
     )
 
@@ -310,10 +313,10 @@ def update_task_tags(db: Session, task_id: UUID, payload: UpdateTaskTagsRequest)
 # ----- AI Generate Subtasks -----
 
 def _build_allowed_tags_snapshot(db: Session) -> dict:
-    groups = db.query(TagGroup).order_by(TagGroup.name).all()
+    groups = db.query(TagGroup).order_by(TagGroup.created_at.asc()).all()
     out: dict[str, list[str]] = {}
     for group in groups:
-        tags = [tag.name for tag in sorted(group.tags, key=lambda x: x.name)]
+        tags = [tag.name for tag in group.tags]
         out[group.name] = tags
     return out
 
@@ -521,8 +524,10 @@ DEFAULT_SYSTEM_TAGS = {
 }
 
 def ensure_default_tag_groups(db: Session):
+    SINGLE_SELECT_GROUPS = {"Mode","Interruptibility"}
+
     # ensure default groups
-    group_map = {}
+    group_map: dict[str, TagGroup] = {}
     for name in DEFAULT_SYSTEM_GROUPS:
         group = (
             db.query(TagGroup)
@@ -533,10 +538,17 @@ def ensure_default_tag_groups(db: Session):
             group = TagGroup(
                 name=name,
                 type="system",
-                is_system=True,
             )
             db.add(group)
             db.flush()
+        
+        if name in SINGLE_SELECT_GROUPS:
+            group.is_single_select = True
+            group.allow_add_tag = False
+        else:
+            group.is_single_select = False
+            group.allow_add_tag = True
+
         group_map[name] = group
     
     # ensure default tags
