@@ -118,9 +118,14 @@ class UpdateTaskTagsRequest(BaseModel):
 class GenerateSubtasksRequest(BaseModel):
     max_subtasks: int = 8
 
+class GeneratedSubtask(BaseModel):
+    id: str
+    title: str
+    description: str | None
+    estimated_minutes: int | None
 
 class GenerateSubtasksResponse(BaseModel):
-    subtasks: List[TaskResponse]
+    subtasks: List[GeneratedSubtask]
 
 try:
     TaskResponse.model_rebuild() 

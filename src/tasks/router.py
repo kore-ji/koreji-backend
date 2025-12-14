@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -8,6 +8,7 @@ from tasks.schemas import (
     TaskResponse,
     TaskUpdate,
     SubtaskCreate,
+    SubtaskUpdate,
     TagGroupCreate,
     TagGroupResponse,
     TagCreate,
@@ -20,6 +21,7 @@ from tasks.schemas import (
 from models.task import TaskStatus, TaskPriority
 from tasks import service
 
+from typing import Annotated, Literal
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -128,8 +130,8 @@ def list_tags(group_id: UUID, db: Session = Depends(get_db)):
 
 # ----- AI Generate Subtasks -----
 @router.post("/{task_id}/generate-subtasks", response_model=GenerateSubtasksResponse)
-def generate_subtasks(task_id: UUID, payload: GenerateSubtasksRequest, db: Session = Depends(get_db)):
-    result = service.generate_subtasks(db, task_id, payload)
+async def generate_subtasks(task_id: UUID, payload: GenerateSubtasksRequest, db: Session = Depends(get_db)):
+    result = await service.generate_subtasks(db, task_id, payload)
     if result is None:
         raise HTTPException(404, "Task not found")
     return result

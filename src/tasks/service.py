@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from sqlalchemy.orm import Session
 
@@ -20,8 +20,13 @@ from tasks.schemas import (
     TagUpdate,
     UpdateTaskTagsRequest,
     GenerateSubtasksRequest,
+    GeneratedSubtask,
+    GenerateSubtasksResponse
 )
 
+from tasks.llm import openrouter_chat
+import json
+from fastapi import HTTPException
 
 # ----- Calculus Task progress -----
 def _compute_task_progress(task: Task) -> float:
@@ -303,7 +308,82 @@ def update_task_tags(db: Session, task_id: UUID, payload: UpdateTaskTagsRequest)
 
 
 # ----- AI Generate Subtasks -----
-def generate_subtasks(
+
+def _build_allowed_tags_snapshot(db: Session) -> dict:
+    groups = db.query(TagGroup).order_by(TagGroup.name).all()
+    out: dict[str, list[str]] = {}
+    for group in groups:
+        tags = [tag.name for tag in sorted(group.tags, key=lambda x: x.name)]
+        out[group.name] = tags
+    return out
+
+def _system_prompt_for_subtasks(*, allowed: dict) -> str:
+    allowed_json = json.dumps(allowed, ensure_ascii=False)
+
+    prompt = """
+        你是一個協助使用者把大型任務切分成可執行子任務的助手。
+        請將「使用者的大任務」拆成多個子任務，子任務可大可小，希望可以切分成有一些能在零碎時間(5-30分鐘內)完成，也有一些可以花比較長時間完成。
+
+        你必須遵守：
+        1) 只能使用「允許的 Tag 清單」中已存在的 tag 名稱，不可自己發明新 tag。
+        2) tag 的表達方式要用 group + name，格式是：
+        "tags": [{{"group": "Tools", "name": "laptop"}}, ...]
+        3) 只輸出 JSON，不要多任何解釋文字。
+
+        允許的 Tag 清單（只能從這裡挑）：
+        {allowed}
+
+        如果找不到適合的 tag，就保持空陣列。
+
+        每個子任務請提供以下資訊：
+        - title
+        - description
+        - estimated_minutes（整數）
+        - tags（陣列，內容必須是使用者目前「已擁有」的 tag`,請每個 tag group 都至少包含一個 tag）
+
+        輸出 JSON 格式：
+        {{
+        "subtasks": [
+            {{
+            "title": "string",
+            "description": "string",
+            "estimated_minutes": 20,
+            "actual_minutes": null,
+            "tags": [{{"group": "string", "name": "string"}}]
+            }}
+        ]
+        }}
+        """.strip()
+
+    return prompt.format(allowed=allowed_json)
+
+def _normalize_subtask_proposal(raw: dict) -> dict:
+    title = (raw.get("title") or "").strip()
+    description = raw.get("description") or None
+
+    est = raw.get("estimated_minutes")
+    if not isinstance(est, int):
+        est = None
+
+    tags = raw.get("tags")
+    if not isinstance(tags, list):
+        tags = []
+    
+    cleaned_tags = [
+        t for t in tags
+        if isinstance(t, dict)
+        and isinstance(t.get("group"), str)
+        and isinstance(t.get("name"), str)
+    ]
+
+    return {
+        "title": title[:200],
+        "description": description,
+        "estimated_minutes": est,
+        "tags": cleaned_tags,
+    }
+
+async def generate_subtasks(
     db: Session,
     task_id: UUID,
     payload: GenerateSubtasksRequest,
@@ -316,12 +396,120 @@ def generate_subtasks(
     For now, just a safe stub to avoid /docs import failure.
     """
 
-    task = get_task(db, task_id)
+    task = db.query(Task).filter(Task.id == task_id, Task.is_subtask.is_(False)).first()
     if not task:
-        return {"subtasks": []}
+        return None
+    
+    # 1) LLM call + parse
+    allowed = _build_allowed_tags_snapshot(db)
+    system = _system_prompt_for_subtasks(allowed=allowed)
 
-    # For now, send back the existing subtasks; will  modify them once actually implement AI.
-    return {"subtasks": list(task.subtasks)}
+    user = f"""
+        使用者的大任務標題：{task.title}
+        使用者的大任務描述：{task.description or ""}
+    """.strip()
+
+    # content = await openrouter_chat([
+    #         {"role": "system", "content": system},
+    #         {"role": "user", "content": user},
+    #     ])
+
+    content = await openrouter_chat([
+        {"role": "user", "content": system + "\n\n" + user},
+    ])
+
+    print("LLM raw content:", content)
+    
+    # Parse JSON
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        cleaned = content.strip().removeprefix("```json").removesuffix("```").strip()
+        data = json.loads(cleaned)
+    
+    raw_subtasks = data.get("subtasks", [])
+    if not isinstance(raw_subtasks, list):
+        raw_subtasks = []
+
+    subtasks_data = [
+        _normalize_subtask_proposal(s)
+        for s in raw_subtasks
+        if isinstance(s, dict)
+    ]
+
+    print("Parsed subtasks tags:", [s.get("tags") for s in subtasks_data])
+
+    # 2) DB transaction: delete old, Create new Subtasks
+    all_tags = db.query(Tag).join(TagGroup).all()
+    tag_index: dict[tuple[str, str], Tag] = {
+        (t.group.name, t.name): t for t in all_tags
+    }
+
+    created: list[Task] = []
+
+    try:
+        # delete old subtasks
+        old_subtasks = db.query(Task).filter(
+            Task.parent_id == task.id,
+            Task.is_subtask.is_(True),
+        ).all()
+
+        for st in old_subtasks:
+            st.tags.clear() # clear association first
+            db.delete(st)   
+
+        db.flush() 
+
+        
+        # create new subtasks
+            
+        for s in subtasks_data:
+            subtask = Task(
+                title=s["title"],
+                description=s["description"],
+                due_date=task.due_date,
+                status=TaskStatus.pending,
+                priority=task.priority,
+                estimated_minutes=s["estimated_minutes"],
+                actual_minutes=None,
+                category=task.category,
+                is_subtask=True,
+                parent_id=task.id,
+                user_id=task.user_id,
+            )
+            
+            # attach tags
+            req_tags = s["tags"]
+            for item in req_tags:
+                tag_obj = tag_index.get((item["group"], item["name"]))
+                if tag_obj:
+                    subtask.tags.append(tag_obj)
+            
+            db.add(subtask)
+            created.append(subtask)
+        
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        print("Error during generate_subtasks DB transaction:", repr(e))
+        raise
+
+    for subtask in created:
+        db.refresh(subtask)
+
+    return GenerateSubtasksResponse(
+        subtasks=[
+            GeneratedSubtask(
+                id=str(t.id),
+                title=t.title,
+                description=t.description,
+                estimated_minutes=t.estimated_minutes,
+            )
+            for t in created
+        ]
+    )
+
 
 # ----- Ensure Default System Tag Groups -----
 DEFAULT_SYSTEM_GROUPS = ["Tools", "Attention", "Location","Interruptibility"]
