@@ -361,7 +361,8 @@ async def generate_subtasks(
         return None
     
     # 1) LLM call + parse
-    allowed = _build_allowed_tags_snapshot(db)
+    allowed = _build_allowed_tags_snapshot(db)\
+    
     system = _system_prompt_for_subtasks(allowed=allowed)
 
     user = f"""
@@ -545,6 +546,152 @@ def parse_question_response(content: str) -> dict:
         out["questions"].append(combined)
 
     return out
+
+async def regenerate_subtasks(
+    db: Session,
+    task_id: UUID,
+    feedback: RegenerateSubtasksRequest,
+) -> Optional[Task]:
+    """
+    Regenerate subtasks based on user feedback from questions.
+    
+    Takes the user's answers to the refinement questions and generates
+    improved subtasks that better match their requirements.
+    """
+    # Get task and verify it exists and is not a subtask
+    task = db.query(Task).filter(Task.id == task_id, Task.is_subtask.is_(False)).first()
+    if not task:
+        return None
+
+    # 1) Fetch existing subtasks from DB for LLM reference
+    existing_subtasks = db.query(Task).filter(
+        Task.parent_id == task.id,
+        Task.is_subtask.is_(True),
+    ).all()
+    
+    # Force load tags for each subtask
+    for st in existing_subtasks:
+        _ = st.tags
+    
+    # Format existing subtasks for LLM
+    previous_subtasks_text = "上次生成的子任務列表：\n"
+    if existing_subtasks:
+        for idx, st in enumerate(existing_subtasks, 1):
+            tag_names = ", ".join([t.name for t in st.tags]) if st.tags else "無"
+            previous_subtasks_text += f"{idx}. 標題：{st.title}\n"
+            previous_subtasks_text += f"   描述：{st.description or '無'}\n"
+            previous_subtasks_text += f"   預估時間：{st.estimated_minutes or '無'} 分鐘\n"
+            previous_subtasks_text += f"   標籤：{tag_names}\n"
+    else:
+        previous_subtasks_text += "（尚未生成任何子任務）\n"
+
+    # 2) Build allowed tags snapshot
+    allowed = _build_allowed_tags_snapshot(db)
+    
+    # 3) Prepare the regeneration prompt with feedback
+    system_prompt = _system_prompt_for_subtasks(allowed=allowed)
+    
+    # 4) Build feedback context from Q&A pairs
+    feedback_context = "\n使用者對上次生成結果的反饋：\n"
+    for i, (question, answer) in enumerate(zip(feedback.questions, feedback.answers), 1):
+        feedback_context += f"{i}. {question}\n   回答：{answer}\n"
+    
+    # 5) Build user message with task info, previous subtasks, and feedback
+    user_message = f"""
+使用者的大任務標題：{task.title}
+使用者的大任務描述：{task.description or ""}
+使用者規劃的大任務預計時間：{task.estimated_minutes or "無"}
+
+{previous_subtasks_text}
+{feedback_context}
+
+請根據上次生成的子任務和使用者的反饋，重新生成更符合使用者需求的子任務列表。
+    """.strip()
+
+    # 5) Call LLM
+    content = await openrouter_chat([
+        {"role": "user", "content": system_prompt + "\n\n" + user_message},
+    ])
+
+    print("LLM raw content for regenerate_subtasks:", content)
+    
+    # 6) Parse JSON response
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        cleaned = content.strip().removeprefix("```json").removesuffix("```").strip()
+        data = json.loads(cleaned)
+    
+    raw_subtasks = data.get("subtasks", [])
+    if not isinstance(raw_subtasks, list):
+        raw_subtasks = []
+
+    subtasks_data = [
+        _normalize_subtask_proposal(s)
+        for s in raw_subtasks
+        if isinstance(s, dict)
+    ]
+
+    print("Parsed regenerated subtasks tags:", [s.get("tags") for s in subtasks_data])
+
+    # 7) DB transaction: delete old subtasks and create new ones
+    all_tags = db.query(Tag).join(TagGroup).all()
+    tag_index: dict[tuple[str, str], Tag] = {
+        (t.group.name, t.name): t for t in all_tags
+    }
+
+    try:
+        # Delete old subtasks
+        old_subtasks = db.query(Task).filter(
+            Task.parent_id == task.id,
+            Task.is_subtask.is_(True),
+        ).all()
+
+        for st in old_subtasks:
+            st.tags.clear()
+            db.delete(st)
+
+        db.flush()
+
+        # Create new subtasks based on regenerated data
+        for s in subtasks_data:
+            subtask = Task(
+                title=s["title"],
+                description=s["description"],
+                due_date=task.due_date,
+                status=TaskStatus.pending,
+                priority=task.priority,
+                estimated_minutes=s["estimated_minutes"],
+                actual_minutes=None,
+                category=task.category,
+                is_subtask=True,
+                parent_id=task.id,
+                user_id=task.user_id,
+            )
+            
+            # Attach tags
+            req_tags = s["tags"]
+            for item in req_tags:
+                tag_obj = tag_index.get((item["group"], item["name"]))
+                if tag_obj:
+                    subtask.tags.append(tag_obj)
+            
+            db.add(subtask)
+        
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        print("Error during regenerate_subtasks DB transaction:", repr(e))
+        raise
+
+    # 8) Refresh and return the updated task with new subtasks
+    db.refresh(task)
+    _ = task.subtasks
+    for st in task.subtasks:
+        _ = st.tags
+
+    return _attach_progress(task)
 
 
 # ----- Ensure Default System Tag Groups -----

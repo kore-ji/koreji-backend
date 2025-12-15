@@ -140,8 +140,8 @@ async def regenerate_questions(task_id: UUID, payload: QuestionsRequest, db: Ses
     return result
 
 @router.post("/{task_id}/regenerate-subtasks", response_model=TaskResponse)
-async def regenerate_subtasks(task_id: UUID, payload: QuestionsResponse, db: Session = Depends(get_db)):
-    result = await service.regenerate_questions(db, task_id, payload.subtasks)
+async def regenerate_subtasks(task_id: UUID, payload: RegenerateSubtasksRequest, db: Session = Depends(get_db)):
+    result = await service.regenerate_subtasks(db, task_id, payload)
     if result is None:
         raise HTTPException(404, "Task not found")
     return result

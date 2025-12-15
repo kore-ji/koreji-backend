@@ -157,6 +157,10 @@ class QuestionsRequest(TaskResponse):
 class QuestionsResponse(BaseModel):
     questions: List[str]
 
+class RegenerateSubtasksRequest(BaseModel):
+    questions: List[str]
+    answers: List[str]
+
 try:
     TaskResponse.model_rebuild() 
 except AttributeError:
