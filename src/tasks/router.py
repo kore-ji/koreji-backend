@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -8,6 +8,7 @@ from tasks.schemas import (
     TaskResponse,
     TaskUpdate,
     SubtaskCreate,
+    SubtaskUpdate,
     TagGroupCreate,
     TagGroupResponse,
     TagCreate,
@@ -20,6 +21,7 @@ from tasks.schemas import (
 from models.task import TaskStatus, TaskPriority
 from tasks import service
 
+from typing import Annotated, Literal
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -52,6 +54,8 @@ def list_tasks(
     parent_id: UUID | None = None,
     status: TaskStatus | None = None,
     category: str | None = None,
+    tag_ids: Annotated[list[UUID] | None, Query()] = None,
+    match: Literal["any", "all"] = "any",
     db: Session = Depends(get_db),
 ):
     """
@@ -69,6 +73,8 @@ def list_tasks(
         parent_id=parent_id,
         status=status,
         category=category,
+        tag_ids=tag_ids,
+        match=match,
     )
 
 @router.get("/{task_id}/subtasks", response_model=list[TaskResponse])
@@ -77,6 +83,10 @@ def list_subtasks(task_id: UUID, db: Session = Depends(get_db)):
     if subtasks is None:
         raise HTTPException(404, "Task not found")
     return subtasks
+
+@router.get("/categories", response_model=list[str])
+def list_task_categories(db: Session = Depends(get_db)):
+    return service.list_task_categories(db)
 
 # ----- Subtasks (Create/Update) -----
 @router.post("/subtasks", response_model=TaskResponse)
@@ -88,7 +98,7 @@ def create_subtask(payload: SubtaskCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/subtasks/{subtask_id}", response_model=TaskResponse)
-def update_subtask(subtask_id: UUID, payload: TaskUpdate, db: Session = Depends(get_db)):
+def update_subtask(subtask_id: UUID, payload: SubtaskUpdate, db: Session = Depends(get_db)):
     subtask = service.update_subtask(db, subtask_id, payload)
     if not subtask:
         raise HTTPException(404, "Subtask not found")
@@ -124,8 +134,8 @@ def list_tags(group_id: UUID, db: Session = Depends(get_db)):
 
 # ----- AI Generate Subtasks -----
 @router.post("/{task_id}/generate-subtasks", response_model=GenerateSubtasksResponse)
-def generate_subtasks(task_id: UUID, payload: GenerateSubtasksRequest, db: Session = Depends(get_db)):
-    result = service.generate_subtasks(db, task_id, payload)
+async def generate_subtasks(task_id: UUID, payload: GenerateSubtasksRequest, db: Session = Depends(get_db)):
+    result = await service.generate_subtasks(db, task_id, payload)
     if result is None:
         raise HTTPException(404, "Task not found")
     return result

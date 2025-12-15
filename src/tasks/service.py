@@ -1,7 +1,8 @@
 from uuid import UUID
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func, distinct
 
 from models.task import (
     Task,
@@ -20,8 +21,14 @@ from tasks.schemas import (
     TagUpdate,
     UpdateTaskTagsRequest,
     GenerateSubtasksRequest,
+    GeneratedSubtask,
+    GenerateSubtasksResponse
 )
 
+from tasks.llm import openrouter_chat
+from tasks.prompts import load
+import json
+from fastapi import HTTPException
 
 # ----- Calculus Task progress -----
 def _compute_task_progress(task: Task) -> float:
@@ -80,6 +87,16 @@ def update_task(db: Session, task_id: str, payload: TaskUpdate) -> Optional[Task
     data = payload.dict(exclude_unset=True)
     for key, value in data.items():
         setattr(task, key, value)
+    
+    # if update top-level task priority, propagate to subtasks
+    if (not task.is_subtask) and ("priority" in data):
+        db.query(Task).filter(
+            Task.parent_id == task.id,
+            Task.is_subtask.is_(True),
+        ).update(
+            {Task.priority: task.priority},
+            synchronize_session=False,
+        )
 
     db.commit()
     db.refresh(task)
@@ -93,6 +110,8 @@ def list_tasks(
     parent_id: Optional[UUID] = None,
     status: Optional[TaskStatus] = None,
     category: Optional[str] = None,
+    tag_ids: Optional[List[UUID]] = None,
+    match: Literal["any", "all"] = "any",
 ) -> List[Task]:
     query = db.query(Task)
 
@@ -112,6 +131,34 @@ def list_tasks(
         query = query.filter(Task.status == status)
     if category is not None:
         query = query.filter(Task.category == category)
+    
+    # Tag filter
+    """
+    tag_ids: list of UUIDs
+    match="any": tasks that have at least one of the tags
+    match="all": tasks that have all of the tags
+    """
+    if tag_ids:
+        if match == "any":
+            query = (
+                query.join(Task.tags)
+                .filter(Tag.id.in_(tag_ids))
+                .distinct()
+            )
+        elif match == "all":
+            query = (
+                query.join(Task.tags)
+                .filter(Tag.id.in_(tag_ids))
+                .group_by(Task.id)
+                .having(func.count(distinct(Tag.id)) == len(tag_ids))
+            )
+        else:
+            # default to "any"
+            query = (
+                query.join(Task.tags)
+                .filter(Tag.id.in_(tag_ids))
+                .distinct()
+            )
 
     tasks = query.order_by(Task.due_date, Task.created_at).all()
 
@@ -142,7 +189,7 @@ def create_subtask(db: Session, payload: SubtaskCreate) -> Task:
         description=payload.description,
         due_date=payload.due_date or parent.due_date,
         status=payload.status,
-        priority=payload.priority,
+        priority=parent.priority,
         estimated_minutes=payload.estimated_minutes,
         actual_minutes=payload.actual_minutes,
         category=parent.category,
@@ -186,7 +233,9 @@ def create_tag_group(db: Session, payload: TagGroupCreate) -> TagGroup:
     group = TagGroup(
         name=payload.name,
         type="custom",     # system we use seed build
-        is_system=False,
+        user_id=None,
+        is_single_select=payload.is_single_select,
+        allow_add_tag=payload.allow_add_tag,
     )
     db.add(group)
     db.commit()
@@ -195,7 +244,7 @@ def create_tag_group(db: Session, payload: TagGroupCreate) -> TagGroup:
 
 
 def list_tag_groups(db: Session) -> List[TagGroup]:
-    return db.query(TagGroup).order_by(TagGroup.name).all()
+    return db.query(TagGroup).order_by(TagGroup.created_at.asc()).all()
 
 def update_tag_group(db: Session, group_id: UUID, payload: TagGroupUpdate) -> Optional[TagGroup]:
     group = db.query(TagGroup).filter(TagGroup.id == group_id).first()
@@ -241,7 +290,7 @@ def list_tags_by_group(db: Session, group_id: UUID) -> List[Tag]:
     return (
         db.query(Tag)
         .filter(Tag.tag_group_id == group_id)
-        .order_by(Tag.name)
+        .order_by(Tag.created_at.asc())
         .all()
     )
 
@@ -261,9 +310,53 @@ def update_task_tags(db: Session, task_id: UUID, payload: UpdateTaskTagsRequest)
     db.refresh(task)
     return _attach_progress(task)
 
+# ----- Task Categories -----
+def list_task_categories(db: Session) -> List[str]:
+    categories = db.query(Task.category).distinct().order_by(Task.category.asc()).all()
+    return [c[0] for c in categories if c[0] is not None]
 
 # ----- AI Generate Subtasks -----
-def generate_subtasks(
+
+def _build_allowed_tags_snapshot(db: Session) -> dict:
+    groups = db.query(TagGroup).order_by(TagGroup.created_at.asc()).all()
+    out: dict[str, list[str]] = {}
+    for group in groups:
+        tags = [tag.name for tag in group.tags]
+        out[group.name] = tags
+    return out
+
+def _system_prompt_for_subtasks(*, allowed: dict) -> str:
+    allowed_json = json.dumps(allowed, ensure_ascii=False)
+    prompt = load("generate_subtasks_system.txt")
+    return prompt.replace("{{ALLOWED_JSON}}", allowed_json)
+
+def _normalize_subtask_proposal(raw: dict) -> dict:
+    title = (raw.get("title") or "").strip()
+    description = raw.get("description") or None
+
+    est = raw.get("estimated_minutes")
+    if not isinstance(est, int):
+        est = None
+
+    tags = raw.get("tags")
+    if not isinstance(tags, list):
+        tags = []
+    
+    cleaned_tags = [
+        t for t in tags
+        if isinstance(t, dict)
+        and isinstance(t.get("group"), str)
+        and isinstance(t.get("name"), str)
+    ]
+
+    return {
+        "title": title[:200],
+        "description": description,
+        "estimated_minutes": est,
+        "tags": cleaned_tags,
+    }
+
+async def generate_subtasks(
     db: Session,
     task_id: UUID,
     payload: GenerateSubtasksRequest,
@@ -276,28 +369,177 @@ def generate_subtasks(
     For now, just a safe stub to avoid /docs import failure.
     """
 
-    task = get_task(db, task_id)
+    task = db.query(Task).filter(Task.id == task_id, Task.is_subtask.is_(False)).first()
     if not task:
-        return {"subtasks": []}
+        return None
+    
+    # 1) LLM call + parse
+    allowed = _build_allowed_tags_snapshot(db)
+    system = _system_prompt_for_subtasks(allowed=allowed)
 
-    # For now, send back the existing subtasks; will  modify them once actually implement AI.
-    return {"subtasks": list(task.subtasks)}
+    user = f"""
+        使用者的大任務標題：{task.title}
+        使用者的大任務描述：{task.description or ""}
+        使用者規劃的大任務預計時間：{task.estimated_minutes or "無"}
+    """.strip()
+
+    # content = await openrouter_chat([
+    #         {"role": "system", "content": system},
+    #         {"role": "user", "content": user},
+    #     ])
+
+    content = await openrouter_chat([
+        {"role": "user", "content": system + "\n\n" + user},
+    ])
+
+    print("LLM raw content:", content)
+    
+    # Parse JSON
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        cleaned = content.strip().removeprefix("```json").removesuffix("```").strip()
+        data = json.loads(cleaned)
+    
+    raw_subtasks = data.get("subtasks", [])
+    if not isinstance(raw_subtasks, list):
+        raw_subtasks = []
+
+    subtasks_data = [
+        _normalize_subtask_proposal(s)
+        for s in raw_subtasks
+        if isinstance(s, dict)
+    ]
+
+    print("Parsed subtasks tags:", [s.get("tags") for s in subtasks_data])
+
+    # 2) DB transaction: delete old, Create new Subtasks
+    all_tags = db.query(Tag).join(TagGroup).all()
+    tag_index: dict[tuple[str, str], Tag] = {
+        (t.group.name, t.name): t for t in all_tags
+    }
+
+    created: list[Task] = []
+
+    try:
+        # delete old subtasks
+        old_subtasks = db.query(Task).filter(
+            Task.parent_id == task.id,
+            Task.is_subtask.is_(True),
+        ).all()
+
+        for st in old_subtasks:
+            st.tags.clear() # clear association first
+            db.delete(st)   
+
+        db.flush() 
+
+        
+        # create new subtasks
+            
+        for s in subtasks_data:
+            subtask = Task(
+                title=s["title"],
+                description=s["description"],
+                due_date=task.due_date,
+                status=TaskStatus.pending,
+                priority=task.priority,
+                estimated_minutes=s["estimated_minutes"],
+                actual_minutes=None,
+                category=task.category,
+                is_subtask=True,
+                parent_id=task.id,
+                user_id=task.user_id,
+            )
+            
+            # attach tags
+            req_tags = s["tags"]
+            for item in req_tags:
+                tag_obj = tag_index.get((item["group"], item["name"]))
+                if tag_obj:
+                    subtask.tags.append(tag_obj)
+            
+            db.add(subtask)
+            created.append(subtask)
+        
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        print("Error during generate_subtasks DB transaction:", repr(e))
+        raise
+
+    for subtask in created:
+        db.refresh(subtask)
+
+    return GenerateSubtasksResponse(
+        subtasks=[
+            GeneratedSubtask(
+                id=str(t.id),
+                title=t.title,
+                description=t.description,
+                estimated_minutes=t.estimated_minutes,
+            )
+            for t in created
+        ]
+    )
+
 
 # ----- Ensure Default System Tag Groups -----
-DEFAULT_SYSTEM_GROUPS = ["Tools", "Attention", "Location"]
+DEFAULT_SYSTEM_GROUPS = ["Tools", "Mode", "Location","Interruptibility"]
+DEFAULT_SYSTEM_TAGS = {
+    "Tools": ["Phone", "Computer", "iPad", "Textbook"],
+    "Mode": ["Relax", "Focus", "Efficiency"],
+    "Location": ["Home", "Classroom", "Library", "None"],
+    "Interruptibility": ["Interruptible", "Not Interruptible"],
+}
 
 def ensure_default_tag_groups(db: Session):
+    SINGLE_SELECT_GROUPS = {"Mode","Interruptibility"}
+
+    # ensure default groups
+    group_map: dict[str, TagGroup] = {}
     for name in DEFAULT_SYSTEM_GROUPS:
-        exists = (
+        group = (
             db.query(TagGroup)
             .filter(TagGroup.name == name, TagGroup.type == "system")
             .first()
         )
-        if not exists:
+        if not group:
             group = TagGroup(
                 name=name,
                 type="system",
-                is_system=True,
             )
             db.add(group)
+            db.flush()
+        
+        if name in SINGLE_SELECT_GROUPS:
+            group.is_single_select = True
+            group.allow_add_tag = False
+        else:
+            group.is_single_select = False
+            group.allow_add_tag = True
+
+        group_map[name] = group
+    
+    # ensure default tags
+    for group_name, tag_names in DEFAULT_SYSTEM_TAGS.items():
+        group = group_map.get(group_name)
+        if not group:
+            continue
+        for tag_name in tag_names:
+            exists = (
+                db.query(Tag)
+                .filter(Tag.tag_group_id == group.id, Tag.name == tag_name)
+                .first()
+            )
+            if not exists:
+                db.add(
+                    Tag(
+                        name=tag_name,
+                        tag_group_id=group.id,
+                        is_system=True,
+                    )
+                )
+
     db.commit()
