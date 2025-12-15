@@ -26,9 +26,9 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=255), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('email'),
-    sa.UniqueConstraint('id')
+    sa.PrimaryKeyConstraint('id', name='users_pkey'),
+    sa.UniqueConstraint('email', name='users_email_unique'),
+    sa.UniqueConstraint('id', name='users_id_unique')
     )
     # ### end Alembic commands ###
 
