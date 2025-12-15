@@ -4,6 +4,7 @@ from records.router import router as records_router
 from fastapi.middleware.cors import CORSMiddleware
 from users.router import router as users_router
 from tasks.router import router as tasks_router
+from AI.router import router as ai_router
 import models
 
 from dotenv import load_dotenv
@@ -38,8 +39,8 @@ app.include_router(records_router)
 # include tasks router
 app.include_router(tasks_router)
 
-# include tasks router
-app.include_router(tasks_router)
+# include AI recommendation router
+app.include_router(ai_router)
 
 # Create tables for development (Alembic handles migrations for production)
 models.Base.metadata.create_all(bind=engine)
