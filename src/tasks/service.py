@@ -18,17 +18,21 @@ import json
 from fastapi import HTTPException
 
 # ----- Calculus Task progress -----
-def _compute_task_progress(task: Task) -> float:
+DONE_STATUSES = {TaskStatus.completed, TaskStatus.archived}
+def _compute_task_progress(task: Task) -> int:
     if task.is_subtask:
-        return 0.0
+        return 0
     if not task.subtasks:
-        return 0.0
+        return 100 if task.status in DONE_STATUSES else 0
 
     total = len(task.subtasks)
-    completed = sum(
-        1 for s in task.subtasks if s.status == TaskStatus.completed
+    if total == 0:
+        return 0
+    done = sum(
+        1 for s in task.subtasks
+        if s.status in DONE_STATUSES
     )
-    return completed / total
+    return int((done / total) * 100)
 
 def _attach_progress(task: Task) -> Task:
     task.progress = _compute_task_progress(task)
@@ -74,12 +78,21 @@ def get_task(db: Session, task_id: str) -> Optional[Task]:
     _ = task.tags
     return _attach_progress(task)
 
+def _replace_tags(db: Session, task: Task, tag_ids: list[UUID]):
+    task.tags.clear()
+    _attach_tags(db, task, tag_ids)
+
 def update_task(db: Session, task_id: str, payload: TaskUpdate) -> Optional[Task]:
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         return None
 
     data = payload.dict(exclude_unset=True)
+
+    tag_ids = data.pop("tag_ids", None)
+    if tag_ids is not None:
+        _replace_tags(db, task, tag_ids)
+
     for key, value in data.items():
         setattr(task, key, value)
     
@@ -217,6 +230,11 @@ def update_subtask(
         return None
 
     data = payload.dict(exclude_unset=True)
+
+    tag_ids = data.pop("tag_ids", None)
+    if tag_ids is not None:
+        _replace_tags(db, subtask, tag_ids)
+        
     for key, value in data.items():
         setattr(subtask, key, value)
 

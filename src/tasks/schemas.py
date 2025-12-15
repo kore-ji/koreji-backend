@@ -96,6 +96,7 @@ class SubtaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
     estimated_minutes: Optional[int] = None
     actual_minutes: Optional[int] = None
+    tag_ids: Optional[list[UUID]] = None
 
     if V2:
         model_config = ConfigDict(from_attributes=True)
@@ -114,6 +115,7 @@ class TaskUpdate(BaseModel):
     estimated_minutes: Optional[int] = None
     actual_minutes: Optional[int] = None
     category: Optional[str] = None
+    tag_ids: Optional[list[UUID]] = None
 
 class TaskResponse(TaskBase):
     id: UUID
