@@ -99,6 +99,12 @@ class Tag(Base):
         back_populates="tags"
     )
 
+    # Convenience property so Pydantic responses can include the
+    # human-readable tag group name directly (e.g. "Tools", "Mode").
+    @property
+    def group_name(self) -> str:
+        return self.group.name if self.group else ""
+
 # ----- Join Table：Task-Tag -----
 class TaskTag(Base):
     __tablename__ = "task_tags"
