@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Integer, Date, DateTime, Enum, ForeignKey, Boolean
+from sqlalchemy import Column, String, Text, Integer, Date, DateTime, Enum, ForeignKey, Boolean, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -63,10 +63,19 @@ class TagGroup(Base):
 
     type = Column(String, nullable=False, default="custom") # system / custom
 
-    is_system = Column(Boolean, nullable=False, default=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
-    tags = relationship("Tag", back_populates="group", cascade="all, delete-orphan")
+    is_single_select = Column(Boolean, nullable=False, default=False)
+    allow_add_tag = Column(Boolean, nullable=False, default=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    tags = relationship(
+        "Tag",
+        back_populates="group",
+        cascade="all, delete-orphan",
+        order_by="Tag.created_at"
+    )
 
 # ----- Tag Model -----
 class Tag(Base):
@@ -79,6 +88,8 @@ class Tag(Base):
 
     is_system = Column(Boolean, nullable=False, default=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     
     group = relationship("TagGroup", back_populates="tags")
 
