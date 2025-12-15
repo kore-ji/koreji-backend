@@ -80,14 +80,7 @@ if __name__ == "__main__":
     recommender = TaskRecommender()
     prompt = recommender.build_prompt(tasks=tasks, user_context=payload)
 
-    print("\n=== PROMPT PREVIEW (first 1200 chars) ===")
-    print(prompt[:1200])
-
-    print("\n=== CALLING LLM ===")
     raw = call_llm(prompt)
-    print("\n=== RAW LLM RESPONSE ===")
-    print(raw)
 
     data = _extract_json(raw)
-    print("\n=== PARSED RECOMMENDATIONS ===")
     print(json.dumps(data, indent=2, ensure_ascii=False))
