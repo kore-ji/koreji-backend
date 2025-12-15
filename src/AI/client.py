@@ -1,77 +1,37 @@
-# src/ai/llm_client.py
-
-import json
+# testllm.py
+import os
 import requests
-from typing import List, Dict, Any
+from dotenv import load_dotenv
 
 
-class LLMClient:
-    """
-    A unified interface for calling different LLM providers:
-    - OpenRouter (Gemini, GPT, Claude)
-    - Ollama (local models)
-    """
+load_dotenv()  # 只讀 .env
 
-    def __init__(self, provider: str, model: str, api_key: str = None):
-        """
-        provider: "openrouter" or "ollama"
-        model: model name ("google/gemini-pro-1.5", "qwen2:7b", etc.)
-        """
-        self.provider = provider
-        self.model = model
-        self.api_key = api_key
+API_KEY = os.getenv("OPENROUTER_API_KEY")
+if not API_KEY:
+    raise RuntimeError("OPENROUTER_API_KEY not found")
 
-    # ==============================
-    # OpenRouter
-    # ==============================
-    def _call_openrouter(self, prompt: str) -> str:
-        url = "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"
+def call_llm(prompt: str):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "koreji-test",
+    }
+    payload = {
+        # "model": "openai/gpt-oss-120b:free",
+        #"model": "google/gemini-2.0-flash-exp:free",
+        "model": "google/gemma-3n-e2b-it:free",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.2,
+    }
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+    r = requests.post(url, headers=headers, json=payload, timeout=30)
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
 
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": "You are a helpful AI assistant."},
-                {"role": "user", "content": prompt},
-            ]
-        }
+if __name__ == "__main__":
+    print(call_llm("用一句話跟我打招呼"))
 
-        response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
-
-    # ==============================
-    # Ollama (本地模型)
-    # ==============================
-    def _call_ollama(self, prompt: str) -> str:
-        url = "http://localhost:11434/api/chat"
-
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
-        }
-
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return response.json()["message"]["content"]
-
-    # ==============================
-    # Public function
-    # ==============================
-    def generate(self, prompt: str) -> str:
-        """
-        Automatically route to correct provider.
-        """
-        if self.provider == "openrouter":
-            return self._call_openrouter(prompt)
-
-        if self.provider == "ollama":
-            return self._call_ollama(prompt)
-
-        raise ValueError(f"Unknown provider: {self.provider}")
