@@ -18,17 +18,21 @@ import json
 from fastapi import HTTPException
 
 # ----- Calculus Task progress -----
-def _compute_task_progress(task: Task) -> float:
+DONE_STATUSES = {TaskStatus.completed, TaskStatus.archived}
+def _compute_task_progress(task: Task) -> int:
     if task.is_subtask:
-        return 0.0
+        return 0
     if not task.subtasks:
-        return 0.0
+        return 100 if task.status in DONE_STATUSES else 0
 
     total = len(task.subtasks)
-    completed = sum(
-        1 for s in task.subtasks if s.status == TaskStatus.completed
+    if total == 0:
+        return 0
+    done = sum(
+        1 for s in task.subtasks
+        if s.status in DONE_STATUSES
     )
-    return completed / total
+    return int((done / total) * 100)
 
 def _attach_progress(task: Task) -> Task:
     task.progress = _compute_task_progress(task)
