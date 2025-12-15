@@ -2,18 +2,14 @@
 
 import json
 from typing import List, Dict, Any
-from AI.client import LLMClient
+from src.AI.client import call_llm
 
 
 class TaskRecommender:
 
-    def __init__(self, provider: str, model: str, api_key: str = None):
-        """
-        provider: "openrouter" or "ollama"
-        model: model name
-        api_key: required only for OpenRouter
-        """
-        self.llm = LLMClient(provider, model, api_key)
+    def __init__(self):
+        
+        pass
 
     # ---------------------------
     # Prompt building
@@ -29,19 +25,23 @@ You will ONLY perform internal scoring, ranking, and reasoning based on the prov
 1. INTERNAL SCORING RULES
 ====================================================
 
-Privately compute the following scores for each candidate task (0–1):
-- time_score      = suitability between task duration and the user's available time
-- place_score     = compatibility with the user's current location
-- mode_score      = alignment with the user's current mode (focus, relax, exercise, etc.)
-- history_bonus   = alignment with the user's long-term profile (when not conflicting)
+You will score EACH task independently on these dimensions (integer only: -2 , -1 ,0, 1, or 2):
+- time_score: how well task estimated_minutes matches USER_CONTEXT.available_minutes (closer = higher)
+- place_score: task place tags vs USER_CONTEXT.current_place (match = higher; missing info => 0)
+- mode_score: task mode tags vs USER_CONTEXT.mode (must match to score; missing info => 0)
+- tool_score: task required tool tags vs USER_CONTEXT.tools (user must have it; missing info => 0)
+- interruptible: if task explicitly says it can be interrupted (missing info => 0)
+- deadline: if task due_date is close/urgent (missing info => 0)
 
 Use this internal final score formula:
 
 final_score =
-    time_score * 0.35 +
-    place_score * 0.25 +
-    mode_score * 0.25 +
-    history_bonus * 0.15
+    time_score * 4 +
+    place_score * 2 +
+    mode_score * 2 +
+    tool_score * 10 +
+    interruptible * 4 +
+    deadline * 4
 
 These scores MUST be used in your reasoning,  
 but MUST NOT be shown in the final JSON output.
@@ -112,21 +112,21 @@ CANDIDATE_TASKS:
 EXCLUDE_LIST:
 {{exclude_list}}
 
-"""
+""".strip()
 
+        # 把你的 user_context dict 拆出來
+        user_current_input = user_context.get("user_current_input", {})
+        user_long_term_profile = user_context.get("user_long_term_profile", {})
+        candidate_tasks = user_context.get("candidate_tasks_after_sql_filtering", tasks)
+        exclude_list = user_context.get("exclude_list", [])
 
+        prompt = RECOMMENDATION_SYSTEM_PROMPT
+        prompt = prompt.replace("{{user_current_input}}", json.dumps(user_current_input, ensure_ascii=False, indent=2))
+        prompt = prompt.replace("{{user_long_term_profile}}", json.dumps(user_long_term_profile, ensure_ascii=False, indent=2))
+        prompt = prompt.replace("{{candidate_tasks_after_sql_filtering}}", json.dumps(candidate_tasks, ensure_ascii=False, indent=2))
+        prompt = prompt.replace("{{exclude_list}}", json.dumps(exclude_list, ensure_ascii=False, indent=2))
 
+        return prompt
 
-    # ---------------------------
-    # Main ranking method
-    # ---------------------------
-    def rank(self, tasks, user_context):
-        prompt = self.build_prompt(tasks, user_context)
-        raw = self.llm.generate(prompt)
-
-        try:
-            return json.loads(raw)
-        except Exception:
-            return {"error": "Invalid JSON", "raw": raw}
 
 

@@ -1,36 +1,93 @@
-# testllm.py
-import os
-import requests
-from dotenv import load_dotenv
+# src/AI/testllm.py
+import json
+import re
+from sqlalchemy import text
 
-load_dotenv()  # 只讀 .env
+from src.database import get_db
+from src.AI.prompt import TaskRecommender
+from src.AI.client import call_llm  # ✅ 真的叫 LLM
 
-API_KEY = os.getenv("OPENROUTER_API_KEY")
-if not API_KEY:
-    raise RuntimeError("OPENROUTER_API_KEY not found")
 
-def call_llm(prompt: str):
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost",
-        "X-Title": "koreji-test",
-    }
-    payload = {
-        # "model": "openai/gpt-oss-120b:free",
-        #"model": "google/gemini-2.0-flash-exp:free",
-        "model": "google/gemma-3n-e2b-it:free",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.2,
-    }
+def load_tasks_from_db(db):
+    sql = text("""
+    SELECT
+        t.id,
+        t.title,
+        t.estimated_minutes,
+        t.due_date,
+        tg.name AS tag_group,
+        tag.name AS tag_name
+    FROM tasks t
+    LEFT JOIN task_tags tt ON tt.task_id = t.id
+    LEFT JOIN tags tag ON tag.id = tt.tag_id
+    LEFT JOIN tag_groups tg ON tg.id = tag.tag_group_id
+    WHERE t.status = 'pending'
+    ORDER BY t.created_at;
+    """)
 
-    r = requests.post(url, headers=headers, json=payload, timeout=30)
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    rows = db.execute(sql).fetchall()
+
+    tasks = {}
+    for r in rows:
+        tid = str(r.id)
+        if tid not in tasks:
+            tasks[tid] = {
+                "task_id": tid,
+                "title": r.title,
+                "estimated_minutes": r.estimated_minutes,
+                "due_date": str(r.due_date) if r.due_date else None,
+                "tags": {},
+            }
+        if r.tag_group and r.tag_name:
+            tasks[tid]["tags"].setdefault(r.tag_group, []).append(r.tag_name)
+
+    return list(tasks.values())
+
+
+def _extract_json(text: str):
+    # 允許 ```json ... ``` 或直接 JSON
+    s = (text or "").strip()
+    s = re.sub(r"^```json\s*", "", s)
+    s = re.sub(r"^```\s*", "", s)
+    s = re.sub(r"\s*```$", "", s)
+    m = re.search(r"\{.*\}", s, flags=re.S)
+    if not m:
+        raise ValueError("LLM output is not JSON")
+    return json.loads(m.group(0))
+
 
 if __name__ == "__main__":
-    print(call_llm("用一句話跟我打招呼"))
+    print("=== CONNECTING TO DATABASE ===")
+    db = next(get_db())
 
+    tasks = load_tasks_from_db(db)
+    print(f"=== LOADED {len(tasks)} TASKS FROM DB ===")
+
+    user_current = {
+        "available_minutes": 30,
+        "current_place": "Home",
+        "mode": "Efficiency",
+        "tools": ["Computer", "Phone"],
+    }
+
+    payload = {
+        "user_current_input": user_current,
+        "user_long_term_profile": {},
+        "candidate_tasks_after_sql_filtering": tasks,
+        "exclude_list": [],
+    }
+
+    recommender = TaskRecommender()
+    prompt = recommender.build_prompt(tasks=tasks, user_context=payload)
+
+    print("\n=== PROMPT PREVIEW (first 1200 chars) ===")
+    print(prompt[:1200])
+
+    print("\n=== CALLING LLM ===")
+    raw = call_llm(prompt)
+    print("\n=== RAW LLM RESPONSE ===")
+    print(raw)
+
+    data = _extract_json(raw)
+    print("\n=== PARSED RECOMMENDATIONS ===")
+    print(json.dumps(data, indent=2, ensure_ascii=False))
