@@ -1,4 +1,5 @@
 from .user import User
+from .record import Record
 from .task import Task, TagGroup, Tag, TaskTag
 from database import Base
 
@@ -6,6 +7,7 @@ from database import Base
 __all__ = [
     "Base",
     "User",
+    "Record",
     "Task",
     "TagGroup",
     "Tag",
