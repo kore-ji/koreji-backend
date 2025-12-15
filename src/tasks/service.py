@@ -49,6 +49,11 @@ def _attach_progress(task: Task) -> Task:
 
 
 # ----- Task -----
+def _attach_tags(db: Session, task: Task, tag_ids: list[UUID]):
+    if not tag_ids:
+        return
+    tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all()
+    task.tags.extend(tags)
 
 def create_task(db: Session, payload: TaskCreate) -> Task:
     task = Task(
@@ -65,6 +70,9 @@ def create_task(db: Session, payload: TaskCreate) -> Task:
         user_id=None,
     )
     db.add(task)
+    db.flush()  
+    _attach_tags(db, task, payload.tag_ids)
+
     db.commit()
     db.refresh(task)
     return _attach_progress(task)
@@ -198,6 +206,8 @@ def create_subtask(db: Session, payload: SubtaskCreate) -> Task:
         user_id=parent.user_id,
     )
     db.add(subtask)
+    db.flush()
+    _attach_tags(db, subtask, payload.tag_ids)
     db.commit()
     db.refresh(subtask)
     return subtask

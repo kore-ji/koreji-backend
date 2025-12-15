@@ -77,6 +77,7 @@ class TaskBase(BaseModel):
 
 class TaskCreate(TaskBase):
     category: Optional[str] = None
+    tag_ids: list[UUID] = Field(default_factory=list)
 
 class SubtaskCreate(BaseModel):
     task_id: UUID
@@ -86,6 +87,7 @@ class SubtaskCreate(BaseModel):
     status: TaskStatus = TaskStatus.pending
     estimated_minutes: Optional[int] = None
     actual_minutes: Optional[int] = None
+    tag_ids: list[UUID] = Field(default_factory=list)
 
 class SubtaskUpdate(BaseModel):
     title: Optional[str] = None
