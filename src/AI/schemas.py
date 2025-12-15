@@ -8,6 +8,7 @@ class RecommendRequest(BaseModel):
     tool: str  # comma-separated values e.g. "phone, computer"
 
 class RecommendedTask(BaseModel):
+    task_id: str
     task_name: str
     reason: str
 
