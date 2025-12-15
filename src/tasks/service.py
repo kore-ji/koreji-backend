@@ -309,6 +309,10 @@ def update_task_tags(db: Session, task_id: UUID, payload: UpdateTaskTagsRequest)
     db.refresh(task)
     return _attach_progress(task)
 
+# ----- Task Categories -----
+def list_task_categories(db: Session) -> List[str]:
+    categories = db.query(Task.category).distinct().order_by(Task.category.asc()).all()
+    return [c[0] for c in categories if c[0] is not None]
 
 # ----- AI Generate Subtasks -----
 

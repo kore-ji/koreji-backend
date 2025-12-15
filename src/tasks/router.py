@@ -84,6 +84,10 @@ def list_subtasks(task_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Task not found")
     return subtasks
 
+@router.get("/categories", response_model=list[str])
+def list_task_categories(db: Session = Depends(get_db)):
+    return service.list_task_categories(db)
+
 # ----- Subtasks (Create/Update) -----
 @router.post("/subtasks", response_model=TaskResponse)
 def create_subtask(payload: SubtaskCreate, db: Session = Depends(get_db)):
