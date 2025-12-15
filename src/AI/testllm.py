@@ -56,19 +56,17 @@ def _extract_json(text: str):
     return json.loads(m.group(0))
 
 
-if __name__ == "__main__":
-    print("=== CONNECTING TO DATABASE ===")
-    db = next(get_db())
+def get_recommendation_from_db_and_llm(db, user_current: dict):
+    """Load pending tasks from DB, build prompt via `TaskRecommender`, call LLM and return parsed JSON.
 
+    Args:
+        db: SQLAlchemy connection/session
+        user_current: dict with keys `available_minutes`, `current_place`, `mode`, `tools`
+
+    Returns:
+        dict: parsed JSON from LLM
+    """
     tasks = load_tasks_from_db(db)
-    print(f"=== LOADED {len(tasks)} TASKS FROM DB ===")
-
-    user_current = {
-        "available_minutes": 30,
-        "current_place": "Home",
-        "mode": "Efficiency",
-        "tools": ["Computer", "Phone"],
-    }
 
     payload = {
         "user_current_input": user_current,
@@ -81,6 +79,4 @@ if __name__ == "__main__":
     prompt = recommender.build_prompt(tasks=tasks, user_context=payload)
 
     raw = call_llm(prompt)
-
-    data = _extract_json(raw)
-    print(json.dumps(data, indent=2, ensure_ascii=False))
+    return _extract_json(raw)

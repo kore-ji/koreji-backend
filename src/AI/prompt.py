@@ -2,7 +2,32 @@
 
 import json
 from typing import List, Dict, Any
-from src.AI.client import call_llm
+
+# Flexible import for LLM client: prefer package-relative imports so this module
+# works whether executed as part of the `src` package or directly.
+try:
+  from .client import call_llm
+except Exception:
+  try:
+    from .client import call_llm
+  except Exception:
+    try:
+      from src.AI.client import call_llm
+    except Exception:
+      try:
+        from AI.client import call_llm
+      except Exception:
+        call_llm = None
+                
+class TaskRecommender:
+  def __init__(self):
+    pass
+
+  # ---------------------------
+  # Prompt building
+  # ---------------------------
+  def build_prompt(self, tasks, user_context) -> str:
+    ...
 
 
 class TaskRecommender:
@@ -30,17 +55,16 @@ class TaskRecommender:
 你需要對每一個任務，在以下維度上分別獨立評分
 （只能使用整數：-2、-1、0、1、或 2）：
 
-time_score：任務的 estimated_minutes 與 USER_CONTEXT.available_minutes 的匹配程度（越接近分數越高）
+time_score：任務的 estimated_minutes 與 USER_CONTEXT.available_minutes 的匹配程度，符合的才給分。
 
-place_score：任務的地點標籤是否與 USER_CONTEXT.current_place 相符（相符分數較高；缺乏資訊則為 0）
+place_score：任務的地點標籤是否與 USER_CONTEXT.current_place 相符（相符分數較高；缺乏資訊則為 0 分）
 
-mode_score：任務的模式標籤是否與 USER_CONTEXT.mode 相符（必須相符才給分；缺乏資訊則為 0）
+mode_score：任務的模式標籤是否與 USER_CONTEXT.mode 相符（必須相符才給分；否則給 -2 分；缺乏資訊則為 0 分）
 
-tool_score：任務所需工具是否包含在 USER_CONTEXT.tools 中（使用者必須擁有該工具；缺乏資訊則為 0）
+tool_score：任務所需工具是否包含在 USER_CONTEXT.tools 中（使用者必須擁有該工具；否則給 -2 分；缺乏資訊則為 0 分）
 
-interruptible：任務是否明確標示為可被中斷（缺乏資訊則為 0）
-
-deadline：任務是否接近或已達截止期限（缺乏資訊則為 0）
+interruptible：任務是否明確標示為可被中斷（可中斷給 2 分；否則給 -2 分；缺乏資訊則為 0 分）
+deadline：任務是否接近或已達截止期限（缺乏資訊則為 0 分）
 
 請在內部使用以下最終分數公式：
 
@@ -112,6 +136,8 @@ reason 必須包含你的思考與推理過程
 
 不得在 JSON 之外輸出任何說明文字
 
+並總結成3個主要重點，並用人性化的方式表達
+
 ====================================================
 
 4. 推理規則（Chain-of-Thought 僅限單一任務）
@@ -143,6 +169,7 @@ CANDIDATE_TASKS：
 
 EXCLUDE_LIST：
 {{exclude_list}}
+
 
 """.strip()
 
