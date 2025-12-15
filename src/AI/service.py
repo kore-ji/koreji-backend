@@ -26,6 +26,7 @@ def _build_tasks_context(db: Session) -> str:
         tag_names = ", ".join([t.name for t in task.tags]) if task.tags else "無"
         
         lines.append(f"{idx}. {task.title}")
+        lines.append(f"   UUID：{task.id}")
         lines.append(f"   分類：{task.category or '無'}")
         lines.append(f"   描述：{task.description or '無'}")
         lines.append(f"   預估時間：{task.estimated_minutes or '無'} 分鐘")
@@ -37,12 +38,10 @@ def _build_tasks_context(db: Session) -> str:
 async def regenerate_questions(
     db: Session,
     current_context: RecommendResponse,
-) -> Optional[QuestionsResponse]:
+) -> Optional[List[str]]:
     """
     Generate 3 questions to help understand why user is unsatisfied
     with the current recommendation results.
-    
-    Similar to tasks regenerate_questions, but for recommendation refinement.
     """
     
     # 1) Load prompt template
@@ -68,23 +67,19 @@ async def regenerate_questions(
     
     # 5) Call LLM
     content = call_llm(prompt)
-    print("LLM raw content for regenerate recommendation questions:", content)
+    # print("LLM raw content for regenerate recommendation questions:", content)
     
     # 6) Parse response
     result = parse_question_response(content)
-    return QuestionsResponse(questions=result["questions"])
+    return result["questions"]
 
 
 async def regenerate_recommendations(
     db: Session,
-    current_context: RecommendRequest,
-    feedback: RegenerateRecommendationRequest,
-) -> Optional[List[Task]]:
+    feedback: RegenerateRequest,
+) -> Optional[RecommendResponse]:
     """
     Regenerate task recommendations based on user feedback.
-    
-    Takes the user's answers to refinement questions and generates
-    improved recommendations that better match their requirements.
     """
     
     # 1) Load previous recommendation results (if any stored in session/cache)
@@ -115,12 +110,15 @@ async def regenerate_recommendations(
     except FileNotFoundError:
         return None  # Prompt template missing
     
-    # 3) Build user context
+    # 3) Build user context from feedback (which contains time, mode, place, tool)
+    # Parse tool string if it's comma-separated
+    tools = [t.strip() for t in feedback.tool.split(",") if t.strip()] if feedback.tool else []
+    
     user_context = f"""
-可用時間：{current_context.time} 分鐘
-當前模式：{current_context.mode}
-當前地點：{current_context.place or "未指定"}
-可用工具：{", ".join(current_context.tool) if current_context.tool else "未指定"}
+可用時間：{feedback.time} 分鐘
+當前模式：{feedback.mode}
+當前地點：{feedback.place or "未指定"}
+可用工具：{", ".join(tools) if tools else "未指定"}
     """.strip()
     
     # 4) Build feedback context from Q&A pairs
@@ -139,7 +137,7 @@ async def regenerate_recommendations(
     
     # 7) Call LLM
     content = call_llm(prompt)
-    print("LLM raw content for regenerate recommendations:", content)
+    # print("LLM raw content for regenerate recommendations:", content)
     
     # 8) Parse JSON response
     try:
@@ -161,9 +159,47 @@ async def regenerate_recommendations(
         if not task_id:
             continue
         
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if task:
-            _ = task.tags  # Force load tags
-            result_tasks.append(task)
+        # Try to query by UUID
+        try:
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if task:
+                _ = task.tags  # Force load tags
+                result_tasks.append((task, rec.get("reason", "")))
+        except Exception as e:
+            # If UUID query fails, try to find by task name as fallback
+            print(f"Failed to query task by ID {task_id}: {e}")
+            # Optionally try to match by title if LLM returned a name instead
+            task = db.query(Task).filter(
+                Task.title.ilike(f"%{task_id}%"),
+                Task.status == TaskStatus.pending,
+                Task.is_subtask.is_(False)
+            ).first()
+            if task:
+                _ = task.tags
+                result_tasks.append((task, rec.get("reason", "")))
+                print(f"Found task by title match: {task.title} (ID: {task.id})")
     
-    return result_tasks[:4]  # Return top 4
+    # 10) Convert Task objects to RecommendedTask format
+    recommended_task_list = []
+    for task_tuple in result_tasks[:4]:
+        if isinstance(task_tuple, tuple):
+            task, reason = task_tuple
+        else:
+            task = task_tuple
+            reason = "推薦給您"
+            
+        recommended_task_list.append(
+            RecommendedTask(
+                task_name=task.title,
+                reason=reason
+            )
+        )
+    
+    # 11) Return RecommendResponse with context and recommendations
+    return RecommendResponse(
+        time=feedback.time,
+        mode=feedback.mode,
+        place=feedback.place,
+        tool=feedback.tool,
+        recommended_tasks=recommended_task_list
+    )

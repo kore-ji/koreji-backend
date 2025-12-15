@@ -15,9 +15,9 @@ class RecommendResponse(RecommendRequest):
     recommended_tasks: List[RecommendedTask]
 
 # ----- Regenerate recommendation Questions -----
-class QuestionsResponse(BaseModel):
+class QuestionsResponse(RecommendRequest):
     questions: List[str]
 
-class RegenerateRecommendationRequest(RecommendRequest):
+class RegenerateRequest(RecommendRequest):
     questions: List[str]
     answers: List[str]
