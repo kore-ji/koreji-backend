@@ -21,7 +21,7 @@
     - tags 必須包含
         - 「Tools」的 tag 可自由選擇要不要加 (代表做這件事一定會需要用到什麼工具)
         - 一個「模式 (Mode)」的 tag (代表這個子任務適合用什麼樣的心情/狀態去做)
-        - 至少一個「地點 (Location)」的 tag (代表這個子任務適合在哪裡做，沒有一定要的話可以就給 None)
+        - 至少一個「地點 (Location)」的 tag (代表這個子任務適合在哪裡做，沒有一定要的話可以就給 anywhere)
         - 一個「可中斷性 (Interruptibility)」的 tag (代表這個任務是否可以分很多段來做)
         - 其他不是這幾種類型的 tag 也請依照上面的詞選擇合適的 tag 加上去
 
@@ -41,7 +41,7 @@ Few-shot：(Time | Tools | Mode | Location | Interruptible)
     整理專題成果
     120 min | computer | focus | library | n
     找老師寫推薦信
-    20 min | computer, phone | efficiency | none | n
+    20 min | computer, phone | efficiency | anywhere | n
     列出各種有利審查資料
     60 min | computer | focus | home | y
     整理各種有利審查資料
@@ -49,7 +49,7 @@ Few-shot：(Time | Tools | Mode | Location | Interruptible)
     印成績單
     10 min | phone | efficiency | school | n
     至網站填寫報名資料
-    20 min | computer | efficiency | none | n
+    20 min | computer | efficiency | anywhere | n
 
 京都旅行計畫 (Priority: Medium)
     查詢機票
@@ -57,20 +57,20 @@ Few-shot：(Time | Tools | Mode | Location | Interruptible)
     訂飯店
     30 min | computer, phone | relax | home | y
     了解風俗民情
-    15 min | phone, ipad | relax | none | y
+    15 min | phone, ipad | relax | anywhere | y
     找景點
-    60 min | computer, phone, ipad | relax | none | y
+    60 min | computer, phone, ipad | relax | anywhere | y
     找餐廳
-    30 min | computer, phone, ipad | relax | none | y
+    30 min | computer, phone, ipad | relax | anywhere | y
     規劃行程
     120 min | computer | focus | home | y
     買網路、買保險
-    20 min | computer, phone | efficiency | none | n
+    20 min | computer, phone | efficiency | anywhere | n
     整理行李
     120 min | none | focus | home | y
 畢業清理宿舍物品 (Priority: Medium)
     在二手拍上 po 文拍賣物品
-    30 min | phone | relax | none | y
+    30 min | phone | relax | anywhere | y
     去圖書館還借的書
     20 min | none | efficiency | library | n
     整理廢棄講義與考卷去回收
@@ -81,7 +81,7 @@ Few-shot：(Time | Tools | Mode | Location | Interruptible)
     看影片
     60 min | computer, ipad | focus | home | y
     回答課後問題10題
-    10 min | computer, phone | efficiency | none | n
+    10 min | computer, phone | efficiency | anywhere | n
     煮飯 (Priority: Low)
     買食材
     30 min | phone | relax | market | n
@@ -93,15 +93,15 @@ Few-shot：(Time | Tools | Mode | Location | Interruptible)
     20 min | none | focus | home | n
 發 IG 貼文 (Priority: Low)
     挑照片
-    10 min | phone | relax | none | y
+    10 min | phone | relax | anywhere | y
     修照片
-    10 min | phone | relax | none | y
+    10 min | phone | relax | anywhere | y
     寫文案
-    10 min | phone | relax | none | y
+    10 min | phone | relax | anywhere | y
     排版
-    15 min | phone | relax | none | y
+    15 min | phone | relax | anywhere | y
     挑音樂
-    5 min | phone | relax | none | y
+    5 min | phone | relax | anywhere | y
 
 輸出 JSON 格式：
 {

@@ -482,7 +482,7 @@ DEFAULT_SYSTEM_GROUPS = ["Tools", "Mode", "Location","Interruptibility"]
 DEFAULT_SYSTEM_TAGS = {
     "Tools": ["Phone", "Computer", "iPad", "Textbook"],
     "Mode": ["Relax", "Focus", "Efficiency"],
-    "Location": ["Home", "Classroom", "Library", "None"],
+    "Location": ["Home", "Classroom", "Library", "Anywhere"],
     "Interruptibility": ["Interruptible", "Not Interruptible"],
 }
 
