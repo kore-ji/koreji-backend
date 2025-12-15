@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI
+from records.router import router as records_router
 from fastapi.middleware.cors import CORSMiddleware
 from users.router import router as users_router
 from tasks.router import router as tasks_router
@@ -32,6 +33,10 @@ app.add_middleware(
 
 # include users router
 app.include_router(users_router)
+app.include_router(records_router)
+
+# include tasks router
+app.include_router(tasks_router)
 
 # include tasks router
 app.include_router(tasks_router)
