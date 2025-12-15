@@ -133,9 +133,9 @@ def list_tags(group_id: UUID, db: Session = Depends(get_db)):
     return service.list_tags_by_group(db, group_id)
 
 # ----- AI Generate Subtasks -----
-@router.post("/{task_id}/generate-subtasks", response_model=GenerateSubtasksResponse)
-async def generate_subtasks(task_id: UUID, payload: GenerateSubtasksRequest, db: Session = Depends(get_db)):
-    result = await service.generate_subtasks(db, task_id, payload)
+@router.post("/{task_id}/generate-subtasks", response_model=TaskResponse)
+async def generate_subtasks(task_id: UUID, db: Session = Depends(get_db)):
+    result = await service.generate_subtasks(db, task_id)
     if result is None:
         raise HTTPException(404, "Task not found")
     return result

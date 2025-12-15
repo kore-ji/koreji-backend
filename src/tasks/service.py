@@ -49,6 +49,11 @@ def _attach_progress(task: Task) -> Task:
 
 
 # ----- Task -----
+def _attach_tags(db: Session, task: Task, tag_ids: list[UUID]):
+    if not tag_ids:
+        return
+    tags = db.query(Tag).filter(Tag.id.in_(tag_ids)).all()
+    task.tags.extend(tags)
 
 def create_task(db: Session, payload: TaskCreate) -> Task:
     task = Task(
@@ -65,6 +70,9 @@ def create_task(db: Session, payload: TaskCreate) -> Task:
         user_id=None,
     )
     db.add(task)
+    db.flush()  
+    _attach_tags(db, task, payload.tag_ids)
+
     db.commit()
     db.refresh(task)
     return _attach_progress(task)
@@ -198,6 +206,8 @@ def create_subtask(db: Session, payload: SubtaskCreate) -> Task:
         user_id=parent.user_id,
     )
     db.add(subtask)
+    db.flush()
+    _attach_tags(db, subtask, payload.tag_ids)
     db.commit()
     db.refresh(subtask)
     return subtask
@@ -327,6 +337,7 @@ def _build_allowed_tags_snapshot(db: Session) -> dict:
 
 def _system_prompt_for_subtasks(*, allowed: dict) -> str:
     allowed_json = json.dumps(allowed, ensure_ascii=False)
+    print("所有的 allowed_json:"+allowed_json)
     prompt = load("generate_subtasks_system.txt")
     return prompt.replace("{{ALLOWED_JSON}}", allowed_json)
 
@@ -359,8 +370,7 @@ def _normalize_subtask_proposal(raw: dict) -> dict:
 async def generate_subtasks(
     db: Session,
     task_id: UUID,
-    payload: GenerateSubtasksRequest,
-):
+)-> list[Task]:
     """
     Will do:
     1. Get Task.description by task_id
@@ -469,20 +479,12 @@ async def generate_subtasks(
         print("Error during generate_subtasks DB transaction:", repr(e))
         raise
 
-    for subtask in created:
-        db.refresh(subtask)
+    db.refresh(task)
+    _ = task.subtasks
+    for st in task.subtasks:
+        _ = st.tags
 
-    return GenerateSubtasksResponse(
-        subtasks=[
-            GeneratedSubtask(
-                id=str(t.id),
-                title=t.title,
-                description=t.description,
-                estimated_minutes=t.estimated_minutes,
-            )
-            for t in created
-        ]
-    )
+    return _attach_progress(task)
 
 
 # ----- Ensure Default System Tag Groups -----
@@ -490,7 +492,7 @@ DEFAULT_SYSTEM_GROUPS = ["Tools", "Mode", "Location","Interruptibility"]
 DEFAULT_SYSTEM_TAGS = {
     "Tools": ["Phone", "Computer", "iPad", "Textbook"],
     "Mode": ["Relax", "Focus", "Efficiency"],
-    "Location": ["Home", "Classroom", "Library", "None"],
+    "Location": ["Home", "Classroom", "Library", "Anywhere"],
     "Interruptibility": ["Interruptible", "Not Interruptible"],
 }
 
