@@ -12,7 +12,7 @@ from sqlalchemy import text
 logger = logging.getLogger("TaskRecommender")
 if not logging.getLogger().handlers:
     logging.basicConfig(level=logging.INFO)
-#
+##
 # =========================
 # Scoring weights (backend)
 # =========================
