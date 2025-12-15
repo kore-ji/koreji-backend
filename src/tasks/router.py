@@ -127,7 +127,7 @@ async def generate_subtasks(task_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Task not found")
     return result
 
-# ----- AI Generate Regenerate Questions -----
+# ----- AI Regenerate Subtasks -----
 @router.post("/{task_id}/regenerate-questions", response_model=QuestionsResponse)
 async def regenerate_questions(task_id: UUID, payload: QuestionsRequest, db: Session = Depends(get_db)):
     """
@@ -136,7 +136,14 @@ async def regenerate_questions(task_id: UUID, payload: QuestionsRequest, db: Ses
     """
     result = await service.regenerate_questions(db, task_id, payload.subtasks)
     if result is None:
-        raise HTTPException(404, "Questions not found")
+        raise HTTPException(404, "Question not found")
+    return result
+
+@router.post("/{task_id}/regenerate-subtasks", response_model=TaskResponse)
+async def regenerate_subtasks(task_id: UUID, payload: QuestionsResponse, db: Session = Depends(get_db)):
+    result = await service.regenerate_questions(db, task_id, payload.subtasks)
+    if result is None:
+        raise HTTPException(404, "Task not found")
     return result
 
 # ----- Single Task CRUD -----

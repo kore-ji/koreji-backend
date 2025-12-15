@@ -154,12 +154,8 @@ class GenerateSubtasksResponse(BaseModel):
 class QuestionsRequest(TaskResponse):
     pass
 
-class Question(BaseModel):
-    question: str
-    suggested_answers: List[str]
-
 class QuestionsResponse(BaseModel):
-    questions: List[Question]
+    questions: List[str]
 
 try:
     TaskResponse.model_rebuild() 

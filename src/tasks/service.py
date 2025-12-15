@@ -478,9 +478,9 @@ async def regenerate_questions(
     if not task:
         return None
 
-    prompt = load("regenerate_subtasks_questions.txt")
     
     # 1) Prepare ORIGINAL_TASK and GENERATED_SUBTASKS
+    prompt = load("regenerate_subtasks_questions.txt")
     original_task = f"""
         使用者的大任務標題：{task.title}
         使用者的大任務描述：{task.description or ""}
@@ -499,46 +499,52 @@ async def regenerate_questions(
     prompt = prompt.replace("{{ORIGINAL_TASK}}", original_task)
     prompt = prompt.replace("{{GENERATED_SUBTASKS}}", generated_subtasks_text)
 
-    # For debugging
-    # print("Regenerate Questions Prompt:", prompt)
-
     # 3) LLM call
     content = await openrouter_chat([
         {"role": "user", "content": prompt},
     ])
-    print("LLM raw content for regenerate questions:", content)
 
-    return await parse_question_response(content)
+    return parse_question_response(content)
 
-async def parse_question_response(content: str) -> QuestionsResponse:
-    # Parse JSON
+
+def parse_question_response(content: str) -> dict:
+
     try:
         data = json.loads(content)
     except json.JSONDecodeError:
         cleaned = content.strip().removeprefix("```json").removesuffix("```").strip()
         data = json.loads(cleaned)
-        
+
+    out: dict = {"questions": []}
+    
     raw_questions = data.get("questions", [])
     if not isinstance(raw_questions, list):
-        raw_questions = []
+        return out
 
-    questions: list[Question] = []
     for q in raw_questions:
         if not isinstance(q, dict):
             continue
-        question_text = q.get("question")
-        suggested_answers = q.get("suggested_answers", [])
-        if not isinstance(question_text, str) or not question_text.strip():
+            
+        q_text = (q.get("question") or "").strip()
+        if not q_text:
             continue
-        if not isinstance(suggested_answers, list):
-            suggested_answers = []
-        cleaned_answers = [
-            a for a in suggested_answers
-            if isinstance(a, str)
-        ]
-        questions.append(Question(question=question_text.strip(), suggested_answers=cleaned_answers))
+            
+        answers = q.get("suggested_answers", [])
+        if not isinstance(answers, list):
+            answers = []
 
-    return QuestionsResponse(questions=questions)
+        labels = ["A", "B", "C"]
+        parts: list[str] = []
+        for i in range(3):
+            if i < len(answers) and isinstance(answers[i], str):
+                parts.append(f'{labels[i]}："{answers[i]}"')
+            else:
+                parts.append(f'{labels[i]}："其他"')
+
+        combined = f'{q_text}  [{", ".join(parts)}]'
+        out["questions"].append(combined)
+
+    return out
 
 
 # ----- Ensure Default System Tag Groups -----
@@ -599,3 +605,4 @@ def ensure_default_tag_groups(db: Session):
                 )
 
     db.commit()
+
