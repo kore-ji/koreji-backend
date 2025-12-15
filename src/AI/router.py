@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
-from .schema import *
+from .schemas import *
 from tasks.schemas import *
 from models.task import *
 from AI import service
@@ -55,10 +55,22 @@ def recommend(req: RecommendRequest, db=Depends(get_db) if get_db else None):
     # Expecting `data` to be the parsed JSON that testllm returned
     # If it already contains `recommended_tasks`, return it directly; otherwise try to adapt.
     if isinstance(data, dict) and "recommended_tasks" in data:
-        return data
+        return RecommendResponse(
+            time=req.time, 
+            mode=req.mode, 
+            place=req.place, 
+            tool=req.tool, 
+            recommended_tasks=data["recommended_tasks"]
+        )
 
     # Fallback: return empty structure if unexpected shape
-    return {"recommended_tasks": []}
+    return RecommendResponse(
+        time=req.time,
+        mode=req.mode,
+        place=req.place,
+        tool=req.tool,
+        recommended_tasks=[]
+    )
 
 # ----- AI Regenerate Recommendation -----
 @router.post("/regenerate-questions", response_model=QuestionsResponse)

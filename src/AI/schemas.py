@@ -11,5 +11,13 @@ class RecommendedTask(BaseModel):
     task_name: str
     reason: str
 
-class RecommendResponse(BaseModel):
+class RecommendResponse(RecommendRequest):
     recommended_tasks: List[RecommendedTask]
+
+# ----- Regenerate recommendation Questions -----
+class QuestionsResponse(BaseModel):
+    questions: List[str]
+
+class RegenerateRecommendationRequest(RecommendRequest):
+    questions: List[str]
+    answers: List[str]

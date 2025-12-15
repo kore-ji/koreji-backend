@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 import json
 
-from AI.schema import *
+from AI.schemas import *
 from AI.client import call_llm
 from models.task import Task, Tag, TagGroup, TaskStatus
 from AI.prompts import load
@@ -36,7 +36,7 @@ def _build_tasks_context(db: Session) -> str:
 
 async def regenerate_questions(
     db: Session,
-    current_context: RecommendRequest,
+    current_context: RecommendResponse,
 ) -> Optional[QuestionsResponse]:
     """
     Generate 3 questions to help understand why user is unsatisfied

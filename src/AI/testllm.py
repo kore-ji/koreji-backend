@@ -3,9 +3,9 @@ import json
 import re
 from sqlalchemy import text
 
-from src.database import get_db
-from src.AI.prompt import TaskRecommender
-from src.AI.client import call_llm  # ✅ 真的叫 LLM
+from database import get_db
+from AI.prompt import TaskRecommender
+from AI.client import call_llm
 
 
 def load_tasks_from_db(db):
