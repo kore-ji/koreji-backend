@@ -78,12 +78,21 @@ def get_task(db: Session, task_id: str) -> Optional[Task]:
     _ = task.tags
     return _attach_progress(task)
 
+def _replace_tags(db: Session, task: Task, tag_ids: list[UUID]):
+    task.tags.clear()
+    _attach_tags(db, task, tag_ids)
+
 def update_task(db: Session, task_id: str, payload: TaskUpdate) -> Optional[Task]:
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         return None
 
     data = payload.dict(exclude_unset=True)
+
+    tag_ids = data.pop("tag_ids", None)
+    if tag_ids is not None:
+        _replace_tags(db, task, tag_ids)
+
     for key, value in data.items():
         setattr(task, key, value)
     
@@ -221,6 +230,11 @@ def update_subtask(
         return None
 
     data = payload.dict(exclude_unset=True)
+
+    tag_ids = data.pop("tag_ids", None)
+    if tag_ids is not None:
+        _replace_tags(db, subtask, tag_ids)
+        
     for key, value in data.items():
         setattr(subtask, key, value)
 
