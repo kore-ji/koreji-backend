@@ -57,6 +57,9 @@ class TagResponse(TagBase):
     id: UUID
     is_system: bool
     created_at: datetime
+    # Expose the related tag group's name so the frontend can group
+    # tags (e.g. "Tools", "Mode", "Location") without another lookup.
+    group_name: str
 
     if V2:
         model_config = ConfigDict(from_attributes=True)
