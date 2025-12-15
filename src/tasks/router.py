@@ -3,20 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from tasks.schemas import (
-    TaskCreate,
-    TaskResponse,
-    TaskUpdate,
-    SubtaskCreate,
-    SubtaskUpdate,
-    TagGroupCreate,
-    TagGroupResponse,
-    TagCreate,
-    TagResponse,
-    GenerateSubtasksRequest,
-    GenerateSubtasksResponse,
-    UpdateTaskTagsRequest,
-)
+from tasks.schemas import *
 
 from models.task import TaskStatus, TaskPriority
 from tasks import service
@@ -140,8 +127,26 @@ async def generate_subtasks(task_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(404, "Task not found")
     return result
 
-# ----- Single Task CRUD -----
+# ----- AI Regenerate Subtasks -----
+@router.post("/{task_id}/regenerate-questions", response_model=QuestionsResponse)
+async def regenerate_questions(task_id: UUID, payload: QuestionsRequest, db: Session = Depends(get_db)):
+    """
+    Generate 3 questions to help improve the next subtask generation.
+    Call this when user is unsatisfied with the generated subtasks.
+    """
+    result = await service.regenerate_questions(db, task_id, payload.subtasks)
+    if result is None:
+        raise HTTPException(404, "Question not found")
+    return result
 
+@router.post("/{task_id}/regenerate-subtasks", response_model=TaskResponse)
+async def regenerate_subtasks(task_id: UUID, payload: RegenerateSubtasksRequest, db: Session = Depends(get_db)):
+    result = await service.regenerate_subtasks(db, task_id, payload)
+    if result is None:
+        raise HTTPException(404, "Task not found")
+    return result
+
+# ----- Single Task CRUD -----
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(task_id: UUID, db: Session = Depends(get_db)):
     task = service.get_task(db, task_id)
