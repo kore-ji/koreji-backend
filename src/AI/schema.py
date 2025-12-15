@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
+from tasks.schemas import TaskResponse
 
 class RecommendRequest(BaseModel):
     time: int
@@ -7,13 +8,17 @@ class RecommendRequest(BaseModel):
     place: Optional[str] = None
     tool: List[str] = []
 
-# ----- Regenerate recommendation Questions -----
-class RecommendationQuestionsRequest(RecommendRequest):
-    pass
+class Recommendation(BaseModel):
+    task_name: str
+    reason: str
 
-class RecommendationQuestionsResponse(BaseModel):
+class RecommendResponse(RecommendRequest):
+    recommended_tasks: List[Recommendation]
+
+# ----- Regenerate recommendation Questions -----
+class QuestionsResponse(BaseModel):
     questions: List[str]
 
-class RegenerateRecommendationRequest(BaseModel):
+class RegenerateRecommendationRequest(RecommendRequest):
     questions: List[str]
     answers: List[str]
