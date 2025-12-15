@@ -150,6 +150,17 @@ class GeneratedSubtask(BaseModel):
 class GenerateSubtasksResponse(BaseModel):
     subtasks: List[GeneratedSubtask]
 
+# ----- Regenerate Subtasks Questions -----
+class RegenerateQuestionsRequest(GenerateSubtasksResponse):
+    pass
+
+class RegenerateQuestion(BaseModel):
+    question: str
+    suggested_answers: List[str]
+
+class RegenerateQuestionsResponse(BaseModel):
+    questions: List[RegenerateQuestion]
+
 try:
     TaskResponse.model_rebuild() 
 except AttributeError:

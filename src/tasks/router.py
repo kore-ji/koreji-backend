@@ -16,6 +16,8 @@ from tasks.schemas import (
     GenerateSubtasksRequest,
     GenerateSubtasksResponse,
     UpdateTaskTagsRequest,
+    RegenerateQuestionsRequest,
+    RegenerateQuestionsResponse,
 )
 
 from models.task import TaskStatus, TaskPriority
@@ -134,8 +136,20 @@ def list_tags(group_id: UUID, db: Session = Depends(get_db)):
 
 # ----- AI Generate Subtasks -----
 @router.post("/{task_id}/generate-subtasks", response_model=GenerateSubtasksResponse)
-async def generate_subtasks(task_id: UUID, payload: GenerateSubtasksRequest, db: Session = Depends(get_db)):
-    result = await service.generate_subtasks(db, task_id, payload)
+async def generate_subtasks(task_id: UUID, db: Session = Depends(get_db)):
+    result = await service.generate_subtasks(db, task_id)
+    if result is None:
+        raise HTTPException(404, "Task not found")
+    return result
+
+# ----- AI Generate Regenerate Questions -----
+@router.post("/{task_id}/regenerate-questions", response_model=RegenerateQuestionsResponse)
+async def generate_regenerate_questions(task_id: UUID, payload: RegenerateQuestionsRequest, db: Session = Depends(get_db)):
+    """
+    Generate 3 questions to help improve the next subtask generation.
+    Call this when user is unsatisfied with the generated subtasks.
+    """
+    result = await service.generate_regenerate_questions(db, task_id, payload.subtasks)
     if result is None:
         raise HTTPException(404, "Task not found")
     return result

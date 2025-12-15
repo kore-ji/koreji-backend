@@ -10,20 +10,7 @@ from models.task import (
     Tag,
     TaskStatus,
 )
-from tasks.schemas import (
-    TaskCreate,
-    TaskUpdate,
-    SubtaskCreate,
-    SubtaskUpdate,
-    TagGroupCreate,
-    TagGroupUpdate,
-    TagCreate,
-    TagUpdate,
-    UpdateTaskTagsRequest,
-    GenerateSubtasksRequest,
-    GeneratedSubtask,
-    GenerateSubtasksResponse
-)
+from tasks.schemas import *
 
 from tasks.llm import openrouter_chat
 from tasks.prompts import load
@@ -358,8 +345,7 @@ def _normalize_subtask_proposal(raw: dict) -> dict:
 
 async def generate_subtasks(
     db: Session,
-    task_id: UUID,
-    payload: GenerateSubtasksRequest,
+    task_id: UUID
 ):
     """
     Will do:
@@ -483,6 +469,77 @@ async def generate_subtasks(
             for t in created
         ]
     )
+
+# ----- Questions for AI Regenerate Subtasks -----
+async def generate_regenerate_questions(
+    db: Session,
+    task_id: UUID,
+    generated_subtasks: List[GeneratedSubtask],
+) -> Optional[RegenerateQuestionsResponse]:
+    """
+    Generate 3 questions to help improve the next subtask generation
+    based on the previous unsatisfactory result.
+    """
+    # Get task and verify it exists and is not a subtask
+    task = db.query(Task).filter(Task.id == task_id, Task.is_subtask.is_(False)).first()
+    if not task:
+        return None
+
+    prompt = load("regenerate_subtasks_questions.txt")
+    
+    # 1) Prepare ORIGINAL_TASK and GENERATED_SUBTASKS
+    original_task = f"""
+        使用者的大任務標題：{task.title}
+        使用者的大任務描述：{task.description or ""}
+        使用者的大任務類型：{task.category or "無"}
+        使用者規劃的大任務預計時間(分鐘)：{task.estimated_minutes or "無"}
+    """.strip()
+
+
+    # 2) Insert ORIGINAL_TASK and GENERATED_SUBTASKS into prompt
+    prompt = prompt.replace("{{ORIGINAL_TASK}}", original_task)
+    prompt = prompt.replace("{{GENERATED_SUBTASKS}}", generated_subtasks.__str__())
+
+    # For debugging
+    # print("Regenerate Questions Prompt:", prompt)
+
+    # 3) LLM call
+    content = await openrouter_chat([
+        {"role": "user", "content": prompt},
+    ])
+    print("LLM raw content for regenerate questions:", content)
+
+    return await parse_question_response(content)
+
+async def parse_question_response(content: str) -> RegenerateQuestionsResponse:
+    # Parse JSON
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        cleaned = content.strip().removeprefix("```json").removesuffix("```").strip()
+        data = json.loads(cleaned)
+        
+    raw_questions = data.get("questions", [])
+    if not isinstance(raw_questions, list):
+        raw_questions = []
+
+    questions: list[RegenerateQuestion] = []
+    for q in raw_questions:
+        if not isinstance(q, dict):
+            continue
+        question_text = q.get("question")
+        suggested_answers = q.get("suggested_answers", [])
+        if not isinstance(question_text, str) or not question_text.strip():
+            continue
+        if not isinstance(suggested_answers, list):
+            suggested_answers = []
+        cleaned_answers = [
+            a for a in suggested_answers
+            if isinstance(a, str)
+        ]
+        questions.append(RegenerateQuestion(question=question_text.strip(), suggested_answers=cleaned_answers))
+
+    return RegenerateQuestionsResponse(questions=questions)
 
 
 # ----- Ensure Default System Tag Groups -----
