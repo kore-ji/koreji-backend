@@ -19,13 +19,14 @@
 - estimated_minutes（整數）(請參考使用者的大任務預計時間來切分，總和盡量不要超過使用者大任務的預計時間。若使用者沒填寫就沒任意切分。)
 - tags（陣列，內容必須是使用者目前「已擁有」的 tag`,請每個 tag group 都至少包含一個 tag）
     - tags 必須包含
-        - 「工具類型 (Tools)」的 tag 可自由選擇要不要加 (代表做這件事一定會需要用到什麼工具)
+        - 「Tools」的 tag 可自由選擇要不要加 (代表做這件事一定會需要用到什麼工具)
         - 一個「模式 (Mode)」的 tag (代表這個子任務適合用什麼樣的心情/狀態去做)
         - 至少一個「地點 (Location)」的 tag (代表這個子任務適合在哪裡做，沒有一定要的話可以就給 None)
         - 一個「可中斷性 (Interruptibility)」的 tag (代表這個任務是否可以分很多段來做)
-        - 其他類型的 tag 可自由選擇要不要加
+        - 其他不是這幾種類型的 tag 也請依照上面的詞選擇合適的 tag 加上去
 
 這邊給你一些例子，你可以參考這些例子來產生子任務：
+Few-shot：(Time | Tools | Mode | Location | Interruptible)
 準備推甄 (Priority: High)
     建立推甄資訊整理表格
     20 min | phone, computer, ipad | efficiency | home | n

@@ -3,22 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database import get_db
-from tasks.schemas import (
-    TaskCreate,
-    TaskResponse,
-    TaskUpdate,
-    SubtaskCreate,
-    SubtaskUpdate,
-    TagGroupCreate,
-    TagGroupResponse,
-    TagCreate,
-    TagResponse,
-    GenerateSubtasksRequest,
-    GenerateSubtasksResponse,
-    UpdateTaskTagsRequest,
-    RegenerateQuestionsRequest,
-    RegenerateQuestionsResponse,
-)
+from tasks.schemas import *
 
 from models.task import TaskStatus, TaskPriority
 from tasks import service
@@ -135,7 +120,7 @@ def list_tags(group_id: UUID, db: Session = Depends(get_db)):
     return service.list_tags_by_group(db, group_id)
 
 # ----- AI Generate Subtasks -----
-@router.post("/{task_id}/generate-subtasks", response_model=GenerateSubtasksResponse)
+@router.post("/{task_id}/generate-subtasks", response_model=TaskResponse)
 async def generate_subtasks(task_id: UUID, db: Session = Depends(get_db)):
     result = await service.generate_subtasks(db, task_id)
     if result is None:
@@ -143,19 +128,18 @@ async def generate_subtasks(task_id: UUID, db: Session = Depends(get_db)):
     return result
 
 # ----- AI Generate Regenerate Questions -----
-@router.post("/{task_id}/regenerate-questions", response_model=RegenerateQuestionsResponse)
-async def generate_regenerate_questions(task_id: UUID, payload: RegenerateQuestionsRequest, db: Session = Depends(get_db)):
+@router.post("/{task_id}/regenerate-questions", response_model=QuestionsResponse)
+async def regenerate_questions(task_id: UUID, payload: QuestionsRequest, db: Session = Depends(get_db)):
     """
     Generate 3 questions to help improve the next subtask generation.
     Call this when user is unsatisfied with the generated subtasks.
     """
-    result = await service.generate_regenerate_questions(db, task_id, payload.subtasks)
+    result = await service.regenerate_questions(db, task_id, payload.subtasks)
     if result is None:
-        raise HTTPException(404, "Task not found")
+        raise HTTPException(404, "Questions not found")
     return result
 
 # ----- Single Task CRUD -----
-
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(task_id: UUID, db: Session = Depends(get_db)):
     task = service.get_task(db, task_id)

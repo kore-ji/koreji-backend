@@ -314,6 +314,7 @@ def _build_allowed_tags_snapshot(db: Session) -> dict:
 
 def _system_prompt_for_subtasks(*, allowed: dict) -> str:
     allowed_json = json.dumps(allowed, ensure_ascii=False)
+    print("所有的 allowed_json:"+allowed_json)
     prompt = load("generate_subtasks_system.txt")
     return prompt.replace("{{ALLOWED_JSON}}", allowed_json)
 
@@ -345,8 +346,8 @@ def _normalize_subtask_proposal(raw: dict) -> dict:
 
 async def generate_subtasks(
     db: Session,
-    task_id: UUID
-):
+    task_id: UUID,
+)-> list[Task]:
     """
     Will do:
     1. Get Task.description by task_id
@@ -455,27 +456,19 @@ async def generate_subtasks(
         print("Error during generate_subtasks DB transaction:", repr(e))
         raise
 
-    for subtask in created:
-        db.refresh(subtask)
+    db.refresh(task)
+    _ = task.subtasks
+    for st in task.subtasks:
+        _ = st.tags
 
-    return GenerateSubtasksResponse(
-        subtasks=[
-            GeneratedSubtask(
-                id=str(t.id),
-                title=t.title,
-                description=t.description,
-                estimated_minutes=t.estimated_minutes,
-            )
-            for t in created
-        ]
-    )
+    return _attach_progress(task)
 
 # ----- Questions for AI Regenerate Subtasks -----
-async def generate_regenerate_questions(
+async def regenerate_questions(
     db: Session,
     task_id: UUID,
-    generated_subtasks: List[GeneratedSubtask],
-) -> Optional[RegenerateQuestionsResponse]:
+    generated_subtasks: QuestionsRequest,
+) -> Optional[QuestionsResponse]:
     """
     Generate 3 questions to help improve the next subtask generation
     based on the previous unsatisfactory result.
@@ -494,11 +487,17 @@ async def generate_regenerate_questions(
         使用者的大任務類型：{task.category or "無"}
         使用者規劃的大任務預計時間(分鐘)：{task.estimated_minutes or "無"}
     """.strip()
-
+    
+    generated_subtasks_text = f"""
+    已經生成的子任務列表：
+    """ + "\n".join([
+        f"- 子任務：{s}"
+        for s in generated_subtasks
+    ])
 
     # 2) Insert ORIGINAL_TASK and GENERATED_SUBTASKS into prompt
     prompt = prompt.replace("{{ORIGINAL_TASK}}", original_task)
-    prompt = prompt.replace("{{GENERATED_SUBTASKS}}", generated_subtasks.__str__())
+    prompt = prompt.replace("{{GENERATED_SUBTASKS}}", generated_subtasks_text)
 
     # For debugging
     # print("Regenerate Questions Prompt:", prompt)
@@ -511,7 +510,7 @@ async def generate_regenerate_questions(
 
     return await parse_question_response(content)
 
-async def parse_question_response(content: str) -> RegenerateQuestionsResponse:
+async def parse_question_response(content: str) -> QuestionsResponse:
     # Parse JSON
     try:
         data = json.loads(content)
@@ -523,7 +522,7 @@ async def parse_question_response(content: str) -> RegenerateQuestionsResponse:
     if not isinstance(raw_questions, list):
         raw_questions = []
 
-    questions: list[RegenerateQuestion] = []
+    questions: list[Question] = []
     for q in raw_questions:
         if not isinstance(q, dict):
             continue
@@ -537,9 +536,9 @@ async def parse_question_response(content: str) -> RegenerateQuestionsResponse:
             a for a in suggested_answers
             if isinstance(a, str)
         ]
-        questions.append(RegenerateQuestion(question=question_text.strip(), suggested_answers=cleaned_answers))
+        questions.append(Question(question=question_text.strip(), suggested_answers=cleaned_answers))
 
-    return RegenerateQuestionsResponse(questions=questions)
+    return QuestionsResponse(questions=questions)
 
 
 # ----- Ensure Default System Tag Groups -----
