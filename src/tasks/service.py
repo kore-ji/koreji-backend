@@ -327,6 +327,7 @@ def _build_allowed_tags_snapshot(db: Session) -> dict:
 
 def _system_prompt_for_subtasks(*, allowed: dict) -> str:
     allowed_json = json.dumps(allowed, ensure_ascii=False)
+    print("所有的 allowed_json:"+allowed_json)
     prompt = load("generate_subtasks_system.txt")
     return prompt.replace("{{ALLOWED_JSON}}", allowed_json)
 
@@ -359,8 +360,7 @@ def _normalize_subtask_proposal(raw: dict) -> dict:
 async def generate_subtasks(
     db: Session,
     task_id: UUID,
-    payload: GenerateSubtasksRequest,
-):
+)-> list[Task]:
     """
     Will do:
     1. Get Task.description by task_id
@@ -469,20 +469,12 @@ async def generate_subtasks(
         print("Error during generate_subtasks DB transaction:", repr(e))
         raise
 
-    for subtask in created:
-        db.refresh(subtask)
+    db.refresh(task)
+    _ = task.subtasks
+    for st in task.subtasks:
+        _ = st.tags
 
-    return GenerateSubtasksResponse(
-        subtasks=[
-            GeneratedSubtask(
-                id=str(t.id),
-                title=t.title,
-                description=t.description,
-                estimated_minutes=t.estimated_minutes,
-            )
-            for t in created
-        ]
-    )
+    return _attach_progress(task)
 
 
 # ----- Ensure Default System Tag Groups -----
