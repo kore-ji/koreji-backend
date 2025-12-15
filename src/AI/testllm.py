@@ -21,7 +21,7 @@ def load_tasks_from_db(db):
     LEFT JOIN task_tags tt ON tt.task_id = t.id
     LEFT JOIN tags tag ON tag.id = tt.tag_id
     LEFT JOIN tag_groups tg ON tg.id = tag.tag_group_id
-    WHERE t.status = 'pending'
+    WHERE t.status = 'pending' OR t.status = 'in_progress'
     ORDER BY t.created_at;
     """)
 

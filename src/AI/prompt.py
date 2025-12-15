@@ -115,6 +115,7 @@ final_score =
 {
   "recommended_tasks": [
     {
+      "task_id": "任務ID",
       "task_name": "任務名稱",
       "reason": "任務專屬的說明理由"
     }
