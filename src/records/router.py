@@ -9,7 +9,6 @@ from database import get_db
 router = APIRouter(prefix="/api/records", tags=["records"])
 
 allow_fields = [
-    "user_id",
     "mode",
     "place",
     "tool",
@@ -25,10 +24,10 @@ def get_record_endpoint(id: uuid.UUID, db: Session = Depends(get_db)):
     records = RecordService.get_record_by_ID(db, id=id)
     return records
 
-@router.get("/user/{user_id}")
-def get_record_by_userID_endpoint(user_id: uuid.UUID, mode: Optional[str] = None, place: Optional[str] = None, tool: Optional[List[str]] = None, db: Session = Depends(get_db)):
-    records = RecordService.get_record_by_userID(db, user_id=user_id, mode=mode, place=place, tool=tool)
-    return records
+# @router.get("/user/{user_id}")
+# def get_record_by_userID_endpoint(user_id: uuid.UUID, mode: Optional[str] = None, place: Optional[str] = None, tool: Optional[List[str]] = None, db: Session = Depends(get_db)):
+#     records = RecordService.get_record_by_userID(db, user_id=user_id, mode=mode, place=place, tool=tool)
+#     return records
 
 @router.post("/", response_model=RecordResponse)
 def create_record_endpoint(record: RecordCreate, db: Session = Depends(get_db)):
