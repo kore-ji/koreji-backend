@@ -13,11 +13,11 @@ class EventType(str, Enum):
 
 class RecordBase(BaseModel):
     task_id: UUID
-    user_id: Optional[UUID] = None
+    # user_id: Optional[UUID] = None
 
 class RecordCreate(BaseModel):
     task_id: UUID
-    user_id: Optional[UUID] = None
+    # user_id: Optional[UUID] = None
     mode : str
     place : str
     tool : List[str]
